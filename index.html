@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Cultivarnos</title>
+<meta name="description" content="Tu cuaderno de cultivo digital" />
+<meta name="theme-color" content="#3f6b45" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Cultivarnos" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-title">🌿 Cultivarnos</div>
+  <button id="btn-menu" class="icon-btn" aria-label="Más opciones" title="Más opciones">⋮</button>
+</header>
+
+<div id="menu-panel" class="menu-panel hidden">
+  <button id="btn-export" class="menu-item">⬇️ Exportar respaldo</button>
+  <label class="menu-item" for="input-import">⬆️ Importar respaldo</label>
+  <input type="file" id="input-import" accept="application/json" hidden />
+</div>
+
+<main id="app" class="app-view"></main>
+
+<nav id="bottom-nav" class="bottom-nav">
+  <a href="#/inicio" class="nav-item" data-nav="inicio">
+    <span class="nav-icon">🏠</span>
+    <span class="nav-label">Inicio</span>
+  </a>
+  <a href="#/cultivos" class="nav-item" data-nav="cultivos">
+    <span class="nav-icon">🌱</span>
+    <span class="nav-label">Mis cultivos</span>
+  </a>
+  <a href="#/nuevo" class="nav-item nav-item-cta" data-nav="nuevo">
+    <span class="nav-icon">➕</span>
+    <span class="nav-label">Nuevo</span>
+  </a>
+</nav>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="js/utils.js"></script>
+<script src="js/db.js"></script>
+<script src="js/views/inicio.js"></script>
+<script src="js/views/cultivos.js"></script>
+<script src="js/views/nuevo.js"></script>
+<script src="js/views/detalle.js"></script>
+<script src="js/app.js"></script>
+<script>
+  // Menú de exportación / importación
+  document.getElementById('btn-menu').addEventListener('click', () => {
+    document.getElementById('menu-panel').classList.toggle('hidden');
+  });
+
+  document.getElementById('btn-export').addEventListener('click', async () => {
+    document.getElementById('menu-panel').classList.add('hidden');
+    try {
+      const data = await DB.exportAll();
+      const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const fecha = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `cultivarnos-respaldo-${fecha}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast('Respaldo exportado');
+    } catch (err) {
+      console.error(err);
+      showToast('Error al exportar');
+    }
+  });
+
+  document.getElementById('input-import').addEventListener('change', async (e) => {
+    document.getElementById('menu-panel').classList.add('hidden');
+    const file = e.target.files[0];
+    if (!file) return;
+    const confirmMsg = 'Importar reemplazará todos los datos actuales por los del respaldo. ¿Continuar?';
+    if (!window.confirm(confirmMsg)) {
+      e.target.value = '';
+      return;
+    }
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      await DB.importAll(data, { replace: true });
+      showToast('Datos importados');
+      router();
+    } catch (err) {
+      console.error(err);
+      showToast('Error al importar el archivo');
+    } finally {
+      e.target.value = '';
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    const panel = document.getElementById('menu-panel');
+    const btn = document.getElementById('btn-menu');
+    if (!panel.contains(e.target) && e.target !== btn && !panel.classList.contains('hidden')) {
+      panel.classList.add('hidden');
+    }
+  });
+
+  function showToast(msg, duration = 2200) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.remove('hidden');
+    toast.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.classList.add('hidden'), 250);
+    }, duration);
+  }
+  window.showToast = showToast;
+</script>
+</body>
+</html>
