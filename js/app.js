@@ -11,6 +11,10 @@ const ROUTES = {
 };
 
 function parseRoute(hash) {
+  const fotosMatch = hash.match(/^#\/cultivo\/(\d+)\/fotos$/);
+  if (fotosMatch) {
+    return { render: () => renderGaleriaFotos(Number(fotosMatch[1])), nav: 'cultivos' };
+  }
   const detalleMatch = hash.match(/^#\/cultivo\/(\d+)$/);
   if (detalleMatch) {
     return { render: () => renderDetalle(Number(detalleMatch[1])), nav: 'cultivos' };

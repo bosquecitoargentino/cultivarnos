@@ -109,6 +109,25 @@ const DB = {
     return reqToPromise(store.delete(id));
   },
 
+  // Minibiblioteca de fotos de un cultivo: no duplica nada, solo lee los
+  // eventos que tienen foto y arma una lista normalizada (foto + contexto
+  // del evento al que pertenece). Más reciente primero, igual que el
+  // historial. Esta forma normalizada es también la base para poder
+  // agregar comparación de fotos más adelante sin reestructurar nada.
+  async getFotosByCultivo(cultivoId) {
+    const eventos = await this.getEventosByCultivo(cultivoId);
+    return eventos
+      .filter((e) => e.fotoId)
+      .map((e) => ({
+        fotoId: e.fotoId,
+        eventoId: e.id,
+        cultivoId,
+        fecha: e.fecha,
+        tipo: e.tipo,
+        nota: e.nota || null,
+      }));
+  },
+
   // ---------- RECORDATORIOS ----------
   async addRecordatorio(data) {
     const store = await tx('recordatorios', 'readwrite');

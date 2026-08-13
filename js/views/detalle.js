@@ -8,9 +8,10 @@ async function renderDetalle(id, root) {
     return;
   }
 
-  const [eventos, recordatorios] = await Promise.all([
+  const [eventos, recordatorios, fotos] = await Promise.all([
     DB.getEventosByCultivo(id),
     DB.getRecordatoriosByCultivo(id),
+    DB.getFotosByCultivo(id),
   ]);
 
   const fotoUrl = await fotoUrlCache.getUrl(cultivo.fotoId);
@@ -46,6 +47,16 @@ async function renderDetalle(id, root) {
       <div class="section-title">Recordatorios</div>
       <div id="recordatorios-detalle"></div>
     </section>` : ''}
+
+    <section>
+      ${fotos.length
+        ? `<div class="section-title">Fotos · ${fotos.length}</div>
+           <div id="fotos-grid"></div>
+           ${fotos.length > 6 ? `<a href="#/cultivo/${id}/fotos" class="link-ver-todas">Ver todas →</a>` : ''}`
+        : `<div class="section-title">Fotos</div>
+           <p class="fotos-vacio">Todavía no hay fotos registradas.</p>`
+      }
+    </section>
 
     <section>
       <div class="section-title">Historial</div>
@@ -99,20 +110,37 @@ async function renderDetalle(id, root) {
     });
   }
 
+  // Fotos: minibiblioteca visual del cultivo (primeras 6, sin duplicar nada)
+  if (fotos.length) {
+    const fotosGrid = root.querySelector('#fotos-grid');
+    fotosGrid.innerHTML = await renderFotoGridHtml(fotos, 6);
+    fotosGrid.addEventListener('click', (e) => {
+      const item = e.target.closest('.foto-grid-item');
+      if (!item) return;
+      openFotoLightbox(fotos, Number(item.dataset.index));
+    });
+  }
+
   // Timeline
   const timelineWrap = root.querySelector('#timeline');
   if (!eventos.length) {
     timelineWrap.innerHTML = `<div class="empty-state"><span class="emoji">📖</span>Todavía no hay eventos registrados.</div>`;
   } else {
-    const items = await Promise.all(eventos.map(renderTimelineItem));
+    const items = await Promise.all(eventos.map((ev) => renderTimelineItem(ev, fotos)));
     timelineWrap.innerHTML = `<div class="timeline">${items.join('')}</div>`;
     timelineWrap.addEventListener('click', async (e) => {
-      const btn = e.target.closest('.timeline-delete');
-      if (!btn) return;
-      if (!window.confirm('¿Eliminar este evento del historial?')) return;
-      await DB.deleteEvento(Number(btn.dataset.id));
-      showToast('Evento eliminado');
-      renderDetalle(id, root);
+      const deleteBtn = e.target.closest('.timeline-delete');
+      if (deleteBtn) {
+        if (!window.confirm('¿Eliminar este evento del historial?')) return;
+        await DB.deleteEvento(Number(deleteBtn.dataset.id));
+        showToast('Evento eliminado');
+        renderDetalle(id, root);
+        return;
+      }
+      const foto = e.target.closest('.timeline-foto');
+      if (foto) {
+        openFotoLightbox(fotos, Number(foto.dataset.fotoIndex));
+      }
     });
   }
 
@@ -140,8 +168,9 @@ async function renderDetalle(id, root) {
   });
 }
 
-async function renderTimelineItem(ev) {
+async function renderTimelineItem(ev, fotos) {
   const fotoUrl = await fotoUrlCache.getUrl(ev.fotoId);
+  const fotoIndex = fotoUrl ? fotos.findIndex((f) => f.eventoId === ev.id) : -1;
   return `
     <div class="timeline-item">
       <div class="timeline-card">
@@ -151,11 +180,43 @@ async function renderTimelineItem(ev) {
           <span class="timeline-fecha">${formatFecha(ev.fecha)}</span>
         </div>
         ${ev.nota ? `<div class="timeline-nota">${escapeHtml(ev.nota)}</div>` : ''}
-        ${fotoUrl ? `<img class="timeline-foto" src="${fotoUrl}" alt="Foto del evento" />` : ''}
+        ${fotoUrl ? `<button type="button" class="timeline-foto" data-foto-index="${fotoIndex}" aria-label="Ver foto grande"><img src="${fotoUrl}" alt="Foto del evento" /></button>` : ''}
         <button class="timeline-delete" data-id="${ev.id}">Eliminar</button>
       </div>
     </div>
   `;
+}
+
+// Vista completa: todas las fotos del cultivo en una cuadrícula.
+async function renderGaleriaFotos(cultivoId, root) {
+  root = root || APP_ROOT;
+  const cultivo = await DB.getCultivo(cultivoId);
+  if (!cultivo) {
+    root.innerHTML = `<div class="empty-state"><span class="emoji">🔍</span>No se encontró el cultivo.</div>`;
+    return;
+  }
+  const fotos = await DB.getFotosByCultivo(cultivoId);
+
+  root.innerHTML = `
+    <div class="view-header view-header-compacto">
+      <a href="#/cultivo/${cultivoId}" class="volver-link">‹ ${escapeHtml(cultivo.especie)}</a>
+      <h1>Fotos</h1>
+      <p>${fotos.length} fotografía${fotos.length === 1 ? '' : 's'}</p>
+    </div>
+    <div id="fotos-grid-completo"></div>
+  `;
+
+  const grid = root.querySelector('#fotos-grid-completo');
+  if (!fotos.length) {
+    grid.innerHTML = `<p class="fotos-vacio">Todavía no hay fotos registradas.</p>`;
+    return;
+  }
+  grid.innerHTML = await renderFotoGridHtml(fotos);
+  grid.addEventListener('click', (e) => {
+    const item = e.target.closest('.foto-grid-item');
+    if (!item) return;
+    openFotoLightbox(fotos, Number(item.dataset.index));
+  });
 }
 
 function openEventoModal(cultivoId, onSaved) {
