@@ -1,7 +1,9 @@
 // sw.js — Service Worker de Cultivarnos
-// Estrategia: cache-first para el shell de la app, offline-first total.
+// Estrategia: network-first con fallback a cache para el shell de la app
+// (así las actualizaciones se ven al toque sin depender de que el usuario
+// borre el caché a mano), con reserva completa para uso 100% offline.
 
-const CACHE_NAME = 'cultivarnos-v1';
+const CACHE_NAME = 'cultivarnos-v2';
 const APP_SHELL = [
   './',
   './index.html',
@@ -36,21 +38,19 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200 && response.type === 'basic') {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
+    fetch(event.request)
+      .then((response) => {
+        if (response && response.status === 200 && response.type === 'basic') {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
+      })
+      .catch(() =>
+        caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+          if (event.request.mode === 'navigate') return caches.match('./index.html');
         })
-        .catch(() => {
-          if (event.request.mode === 'navigate') {
-            return caches.match('./index.html');
-          }
-        });
-    })
+      )
   );
 });

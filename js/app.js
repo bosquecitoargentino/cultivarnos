@@ -6,7 +6,7 @@ const BOTTOM_NAV = document.getElementById('bottom-nav');
 const ROUTES = {
   '#/inicio': { render: renderInicio, nav: 'inicio' },
   '#/cultivos': { render: renderCultivos, nav: 'cultivos' },
-  '#/nuevo': { render: renderNuevo, nav: 'nuevo' },
+  '#/nuevo': { render: renderNuevo, nav: 'registrar' },
   // '#/cultivo/:id' se maneja aparte
 };
 
@@ -47,11 +47,51 @@ function navigate(hash) {
   }
 }
 
+// Bottom sheet del botón "＋ Registrar" del nav inferior: la acción más
+// frecuente (observación) va primero, crear cultivo queda como opción chica.
+async function openRegistrarSheet() {
+  const { backdrop, close } = createModal(`
+    <div class="modal-sheet">
+      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <h2>Registrar</h2>
+      <button id="sheet-observacion" class="btn-primary" style="margin-bottom:10px;">👁 Registrar observación</button>
+      <button id="sheet-nuevo-cultivo" class="btn-secondary">＋ Nuevo cultivo</button>
+    </div>
+  `);
+
+  backdrop.querySelector('#modal-close').addEventListener('click', close);
+
+  backdrop.querySelector('#sheet-observacion').addEventListener('click', async () => {
+    close();
+    const cultivos = await DB.getAllCultivos();
+    openObservacionRapida(cultivos);
+  });
+
+  backdrop.querySelector('#sheet-nuevo-cultivo').addEventListener('click', () => {
+    close();
+    navigate('#/nuevo');
+  });
+}
+
 window.addEventListener('hashchange', router);
 window.addEventListener('DOMContentLoaded', () => {
   router();
 
+  const navRegistrar = document.getElementById('nav-registrar');
+  if (navRegistrar) {
+    navRegistrar.addEventListener('click', openRegistrarSheet);
+  }
+
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('SW registration failed', err));
+
+    // Si se activa una versión nueva del Service Worker, recargamos una
+    // sola vez para que la app siempre corra el código más reciente.
+    let refrescando = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refrescando) return;
+      refrescando = true;
+      window.location.reload();
+    });
   }
 });

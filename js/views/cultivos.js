@@ -1,26 +1,28 @@
 // views/cultivos.js — vista Mis cultivos + helper de tarjeta reutilizable
 
+// Tarjeta compacta y fotográfica — usada en Inicio y en Mis cultivos.
+// [FOTO] Especie / Variedad / Ubicación · Día N · Estado / Última observación
 async function renderCultivoCardHtml(cultivo) {
   const fotoUrl = await fotoUrlCache.getUrl(cultivo.fotoId);
   const dias = diasDesde(cultivo.fechaInicio);
-  const recordatorios = await DB.getRecordatoriosByCultivo(cultivo.id);
-  const proximo = recordatorios.find((r) => r.estado === 'pendiente');
+  const eventos = await DB.getEventosByCultivo(cultivo.id);
+  const finalizado = cultivo.estado === 'finalizado';
+
+  const metaPartes = [];
+  if (cultivo.ubicacion) metaPartes.push(escapeHtml(cultivo.ubicacion));
+  metaPartes.push(dias >= 0 ? `Día ${dias}` : 'Programado');
+  metaPartes.push(finalizado ? 'Finalizado' : 'Activo');
 
   return `
     <div class="cultivo-card" data-id="${cultivo.id}">
       <div class="cultivo-card-photo" style="${fotoUrl ? `background-image:url('${fotoUrl}')` : ''}">
         ${fotoUrl ? '' : '🌿'}
-        <span class="estado-badge ${cultivo.estado === 'finalizado' ? 'finalizado' : ''}">${cultivo.estado === 'finalizado' ? 'Finalizado' : 'Activo'}</span>
       </div>
       <div class="cultivo-card-body">
         <div class="cultivo-card-especie">${escapeHtml(cultivo.especie)}</div>
         ${cultivo.variedad ? `<div class="cultivo-card-variedad">${escapeHtml(cultivo.variedad)}</div>` : ''}
-        <div class="cultivo-card-meta">
-          ${cultivo.ubicacion ? `<span>📍 ${escapeHtml(cultivo.ubicacion)}</span>` : ''}
-          <span>🗓️ ${formatFechaCorta(cultivo.fechaInicio)}</span>
-        </div>
-        <span class="cultivo-card-dias">${dias >= 0 ? `Día ${dias}` : 'Programado'}</span>
-        ${proximo ? `<div class="cultivo-card-recordatorio">⏰ ${escapeHtml(proximo.titulo)} · ${formatFechaCorta(proximo.fecha)}</div>` : ''}
+        <div class="cultivo-card-meta">${metaPartes.join(' · ')}</div>
+        <div class="cultivo-card-obs">${textoUltimaObservacion(eventos)}</div>
       </div>
     </div>
   `;

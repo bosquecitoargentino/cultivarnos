@@ -169,7 +169,7 @@ function openEventoModal(cultivoId, onSaved) {
       <div class="form-group">
         <label class="form-label">Tipo</label>
         <div class="chip-group" id="ev-tipo">
-          ${EVENTO_TIPOS.map((t, i) => `<div class="chip-option ${i === 0 ? 'selected' : ''}" data-value="${t.value}">${t.icon} ${t.label}</div>`).join('')}
+          ${EVENTO_TIPOS.map((t) => `<div class="chip-option ${t.value === tipoSeleccionado ? 'selected' : ''}" data-value="${t.value}">${t.icon} ${t.label}</div>`).join('')}
         </div>
       </div>
       <div class="form-group">

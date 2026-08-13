@@ -7,6 +7,7 @@ const TIPO_INICIO_LABELS = {
 };
 
 const EVENTO_TIPOS = [
+  { value: 'siembra', label: 'Siembra', icon: '🌰' },
   { value: 'observacion', label: 'Observación', icon: '👁️' },
   { value: 'fotografia', label: 'Fotografía', icon: '📷' },
   { value: 'germinacion', label: 'Germinación', icon: '🌱' },
@@ -58,6 +59,29 @@ function isVencido(fechaIso) {
   const f = new Date(fechaIso);
   f.setHours(23, 59, 59, 999);
   return f < new Date();
+}
+
+// true si un recordatorio "toca hoy": ya venció o es para hoy mismo.
+function esParaHoy(fechaIso) {
+  return fechaIso <= todayIsoDate();
+}
+
+// Texto relativo compacto para fechas pasadas: Hoy / Ayer / Hace N días.
+function textoRelativo(fechaIso) {
+  const dias = diasDesde(fechaIso);
+  if (dias === 0) return 'Hoy';
+  if (dias === 1) return 'Ayer';
+  if (dias > 1) return `Hace ${dias} días`;
+  return formatFechaCorta(fechaIso);
+}
+
+// A partir de la lista de eventos de un cultivo (la que devuelve
+// DB.getEventosByCultivo, ya ordenada de más nuevo a más viejo), arma el
+// texto de "última observación", ignorando el evento de siembra inicial.
+function textoUltimaObservacion(eventos) {
+  const relevantes = (eventos || []).filter((e) => e.tipo !== 'siembra');
+  if (!relevantes.length) return 'Sin observaciones todavía';
+  return textoRelativo(relevantes[0].fecha);
 }
 
 function objectUrlCache() {

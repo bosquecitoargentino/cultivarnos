@@ -157,6 +157,8 @@ function renderNuevo(root) {
       fotoId = await DB.addFoto(fotoBlob);
     }
 
+    const nota = root.querySelector('#f-nota').value.trim() || null;
+
     const cultivoId = await DB.addCultivo({
       especie,
       variedad: root.querySelector('#f-variedad').value.trim() || null,
@@ -164,8 +166,18 @@ function renderNuevo(root) {
       fechaInicio: fecha,
       ubicacion: root.querySelector('#f-ubicacion').value.trim() || null,
       fotoId,
-      nota: root.querySelector('#f-nota').value.trim() || null,
+      nota,
       estado: 'activo',
+    });
+
+    // Evento inicial automático: así la ficha arranca su línea de tiempo
+    // desde el registro, sin pedirle un paso extra a quien está cargando.
+    await DB.addEvento({
+      cultivoId,
+      tipo: 'siembra',
+      fecha,
+      nota,
+      fotoId,
     });
 
     if (recCheck.checked) {
