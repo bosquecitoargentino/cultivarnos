@@ -77,6 +77,33 @@ function objectUrlCache() {
 
 const fotoUrlCache = objectUrlCache();
 
+// Crea un modal tipo "hoja" con animación de entrada/salida.
+// Devuelve { backdrop, close } — usar close() en vez de backdrop.remove()
+// para que la animación de salida se vea antes de sacarlo del DOM.
+function createModal(innerHtml) {
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.innerHTML = innerHtml;
+  document.body.appendChild(backdrop);
+
+  requestAnimationFrame(() => requestAnimationFrame(() => backdrop.classList.add('open')));
+
+  let closed = false;
+  function close() {
+    if (closed) return;
+    closed = true;
+    backdrop.classList.remove('open');
+    backdrop.classList.add('closing');
+    setTimeout(() => backdrop.remove(), 220);
+  }
+
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) close();
+  });
+
+  return { backdrop, close };
+}
+
 function escapeHtml(str) {
   if (str == null) return '';
   return String(str)

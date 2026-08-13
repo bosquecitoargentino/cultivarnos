@@ -43,14 +43,14 @@ function renderNuevo(root) {
 
       <div class="form-group">
         <label class="form-label">Fotografía <span class="optional">(opcional)</span></label>
-        <label class="photo-picker" id="f-photo-picker">
+        <div class="photo-picker" id="f-photo-picker" role="button" tabindex="0" aria-label="Agregar fotografía">
           <span class="photo-picker-placeholder">
             <span class="emoji">📷</span>
             <span>Tocá para agregar una foto</span>
           </span>
           <button type="button" class="remove-photo hidden" id="f-photo-remove">✕</button>
           <input type="file" id="f-foto" accept="image/*" capture="environment" hidden />
-        </label>
+        </div>
       </div>
 
       <div class="form-group">
@@ -105,6 +105,21 @@ function renderNuevo(root) {
   const fotoInput = root.querySelector('#f-foto');
   const photoPlaceholder = root.querySelector('.photo-picker-placeholder');
   const photoRemoveBtn = root.querySelector('#f-photo-remove');
+
+  // Control propio (no <label>): un único camino determinístico para abrir
+  // el selector de archivos, sin depender del reenvío nativo label->input
+  // (que falla de forma inconsistente en varios navegadores móviles).
+  photoPicker.addEventListener('click', (e) => {
+    if (e.target.closest('.remove-photo')) return;
+    fotoInput.click();
+  });
+  photoPicker.addEventListener('keydown', (e) => {
+    if (e.target.closest('.remove-photo')) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      fotoInput.click();
+    }
+  });
 
   fotoInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];

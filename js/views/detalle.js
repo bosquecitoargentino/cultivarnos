@@ -82,8 +82,12 @@ async function renderDetalle(id, root) {
       if (!btn) return;
       const rid = Number(btn.dataset.id);
       if (btn.dataset.action === 'completar') {
+        btn.classList.add('checked');
+        btn.closest('.reminder-item')?.classList.add('completing');
         await DB.updateRecordatorio(rid, { estado: 'completado' });
         showToast('Recordatorio completado');
+        setTimeout(() => renderDetalle(id, root), 220);
+        return;
       } else {
         const rec = pendientes.find((r) => r.id === rid);
         const nueva = new Date(rec.fecha);
@@ -158,9 +162,7 @@ function openEventoModal(cultivoId, onSaved) {
   let fotoBlob = null;
   let tipoSeleccionado = 'observacion';
 
-  const backdrop = document.createElement('div');
-  backdrop.className = 'modal-backdrop';
-  backdrop.innerHTML = `
+  const { backdrop, close } = createModal(`
     <div class="modal-sheet">
       <div class="modal-close-row"><button id="modal-close">✕</button></div>
       <h2>Agregar evento</h2>
@@ -180,22 +182,20 @@ function openEventoModal(cultivoId, onSaved) {
       </div>
       <div class="form-group">
         <label class="form-label">Foto <span class="optional">(opcional)</span></label>
-        <label class="photo-picker" id="ev-photo-picker">
+        <div class="photo-picker" id="ev-photo-picker" role="button" tabindex="0" aria-label="Agregar fotografía">
           <span class="photo-picker-placeholder">
             <span class="emoji">📷</span>
             <span>Tocá para agregar una foto</span>
           </span>
           <button type="button" class="remove-photo hidden" id="ev-photo-remove">✕</button>
           <input type="file" id="ev-foto" accept="image/*" capture="environment" hidden />
-        </label>
+        </div>
       </div>
       <button id="ev-guardar" class="btn-primary">Guardar evento</button>
     </div>
-  `;
-  document.body.appendChild(backdrop);
+  `);
 
-  backdrop.querySelector('#modal-close').addEventListener('click', () => backdrop.remove());
-  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  backdrop.querySelector('#modal-close').addEventListener('click', close);
 
   const tipoGroup = backdrop.querySelector('#ev-tipo');
   tipoGroup.addEventListener('click', (e) => {
@@ -211,6 +211,18 @@ function openEventoModal(cultivoId, onSaved) {
   const photoPlaceholder = backdrop.querySelector('.photo-picker-placeholder');
   const photoRemoveBtn = backdrop.querySelector('#ev-photo-remove');
   let previewUrl = null;
+
+  photoPicker.addEventListener('click', (e) => {
+    if (e.target.closest('.remove-photo')) return;
+    fotoInput.click();
+  });
+  photoPicker.addEventListener('keydown', (e) => {
+    if (e.target.closest('.remove-photo')) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      fotoInput.click();
+    }
+  });
 
   fotoInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -256,19 +268,17 @@ function openEventoModal(cultivoId, onSaved) {
       fotoId,
     });
 
-    backdrop.remove();
+    close();
     showToast('Evento agregado');
     onSaved();
   });
 }
 
 function openRecordatorioModal(cultivoId, onSaved) {
-  const backdrop = document.createElement('div');
-  backdrop.className = 'modal-backdrop';
   const defaultDate = new Date();
   defaultDate.setDate(defaultDate.getDate() + 3);
 
-  backdrop.innerHTML = `
+  const { backdrop, close } = createModal(`
     <div class="modal-sheet">
       <div class="modal-close-row"><button id="modal-close">✕</button></div>
       <h2>Nuevo recordatorio</h2>
@@ -282,18 +292,16 @@ function openRecordatorioModal(cultivoId, onSaved) {
       </div>
       <button id="rec-guardar" class="btn-primary">Guardar recordatorio</button>
     </div>
-  `;
-  document.body.appendChild(backdrop);
+  `);
 
-  backdrop.querySelector('#modal-close').addEventListener('click', () => backdrop.remove());
-  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  backdrop.querySelector('#modal-close').addEventListener('click', close);
 
   backdrop.querySelector('#rec-guardar').addEventListener('click', async () => {
     const titulo = backdrop.querySelector('#rec-titulo').value.trim();
     const fecha = backdrop.querySelector('#rec-fecha').value;
     if (!titulo || !fecha) { showToast('Completá título y fecha'); return; }
     await DB.addRecordatorio({ cultivoId, titulo, fecha, estado: 'pendiente' });
-    backdrop.remove();
+    close();
     showToast('Recordatorio agregado');
     onSaved();
   });
