@@ -37,13 +37,27 @@ async function renderDetalle(id, root) {
     : obtenerPreguntasActuales(cultivo, eventos, new Date(), config.hemisferio, 3);
 
   // Integración con la Biblioteca agronómica: si la especie de este
-  // cultivo está reconocida (mismo matcher que ya usa el motor de
-  // observación) y tiene ficha cargada, ofrecemos un link directo — nunca
-  // al revés, esta vista sigue siendo la única fuente del historial real
-  // del cultivo. Si la especie no está en la Biblioteca todavía, el resto
-  // de la ficha funciona exactamente igual que siempre (sin este link).
-  const especieIdParaFicha = typeof identificarEspecie === 'function' ? identificarEspecie(cultivo.especie) : null;
-  const especieEnBiblioteca = especieIdParaFicha && typeof getEspecie === 'function' ? getEspecie(especieIdParaFicha) : null;
+  // cultivo está reconocida y tiene ficha cargada, ofrecemos un link
+  // directo — nunca al revés, esta vista sigue siendo la única fuente del
+  // historial real del cultivo. Si la especie no está en la Biblioteca
+  // todavía, el resto de la ficha funciona exactamente igual que siempre
+  // (sin este link).
+  //
+  // El matcher es buscarEspecieBibliotecaPorNombre() (motor-biblioteca.js),
+  // que cubre las ~102 especies de la Biblioteca por id, nombre o alias
+  // (Morrón↔Pimiento, Cilantro↔Coriandro, etc.) — un universo mucho más
+  // amplio que identificarEspecie() (preguntas-cultivos.js), que solo
+  // reconoce las ~28 especies del motor de preguntas interactivas y no se
+  // toca acá. Si el nuevo matcher no encuentra nada, probamos igual con
+  // identificarEspecie() como puente hacia atrás, por si el texto libre
+  // cargado coincide con uno de esos alias pero no con ningún nombre/alias
+  // de la Biblioteca (caso borde, no debería pasar para las especies ya
+  // migradas, pero cuesta nada cubrirlo).
+  const especieEnBiblioteca = (typeof buscarEspecieBibliotecaPorNombre === 'function' ? buscarEspecieBibliotecaPorNombre(cultivo.especie) : null)
+    || (() => {
+      const especieIdLegacy = typeof identificarEspecie === 'function' ? identificarEspecie(cultivo.especie) : null;
+      return especieIdLegacy && typeof getEspecie === 'function' ? getEspecie(especieIdLegacy) : null;
+    })();
 
   root.innerHTML = `
     <div class="detalle-hero">

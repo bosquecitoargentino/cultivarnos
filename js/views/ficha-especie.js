@@ -34,12 +34,32 @@ function formatMeses(meses) {
 function etiquetaTipoSeguimiento(tipo) {
   if (tipo === 'servicio') return 'Especie de servicio / biomasa';
   if (tipo === 'agroforestal') return 'Especie agroforestal';
+  if (tipo === 'aromatica_perenne') return 'Aromática perenne';
   return 'Especie hortícola';
 }
 
-// Nombres de etapa legibles — cubre tanto el flujo hortícola estándar
-// como el flujo de una especie de servicio (ver biblioteca-especies.js,
-// especie tithonia, etapas.tipo === 'servicio').
+// Frase breve para el origen — a propósito discreta, sin discurso: solo
+// el dato y, si existe, la región de referencia entre paréntesis. La
+// observación más larga (si la especie la tiene) no se repite acá para no
+// duplicar contenido con la nota taxonómica.
+function etiquetaOrigen(origen) {
+  if (!origen || !origen.estatus) return '';
+  const base = {
+    nativa: 'Especie nativa',
+    introducida: 'Especie introducida',
+    naturalizada: 'Especie naturalizada',
+  }[origen.estatus] || null;
+  if (!base) return '';
+  return origen.regionReferencia ? `${base} (${origen.regionReferencia})` : base;
+}
+
+// Nombres de etapa legibles — cubre los tres flujos posibles: el
+// hortícola estándar, el de una especie de servicio (ver
+// biblioteca-especies.js, especie tithonia, etapas.tipo === 'servicio') y
+// el de una especie agroforestal (árboles/arbustos con estrato definido,
+// manejo de sombra/competencia y podas planificadas — etapas.tipo ===
+// 'agroforestal'). No todas las especies siguen un ciclo hortícola de
+// germinación→floración→cosecha de fruto.
 const ETIQUETA_ETAPA = {
   germinacion: 'Germinación',
   plantula: 'Plántula',
@@ -49,15 +69,21 @@ const ETIQUETA_ETAPA = {
   senescencia: 'Fin de ciclo',
   establecimiento: 'Establecimiento',
   acumulacion_biomasa: 'Acumulación de biomasa',
+  formacion: 'Formación',
+  manejo_estrato: 'Manejo de estrato',
   poda: 'Poda',
   rebrote: 'Rebrote',
 };
 
+const ORDEN_ETAPAS_POR_TIPO = {
+  servicio: ['establecimiento', 'crecimiento', 'acumulacion_biomasa', 'poda', 'rebrote'],
+  agroforestal: ['establecimiento', 'crecimiento', 'formacion', 'manejo_estrato', 'poda', 'rebrote'],
+};
+
 function pintarEtapas(etapas) {
   if (!etapas) return '';
-  const orden = etapas.tipo === 'servicio'
-    ? ['establecimiento', 'crecimiento', 'acumulacion_biomasa', 'poda', 'rebrote']
-    : ['germinacion', 'plantula', 'crecimiento', 'floracion', 'produccion', 'senescencia'];
+  const orden = ORDEN_ETAPAS_POR_TIPO[etapas.tipo]
+    || ['germinacion', 'plantula', 'crecimiento', 'floracion', 'produccion', 'senescencia'];
 
   const bloques = orden
     .filter((key) => etapas[key])
@@ -90,7 +116,7 @@ async function renderFichaEspecie(id, root) {
     return;
   }
 
-  const { identidad, visual, siembra, calendario, ambiente, manejo, etapas, cosecha, ecologia } = especie;
+  const { identidad, visual, origen, siembra, calendario, ambiente, manejo, etapas, cosecha, ecologia } = especie;
   const config = await DB.getConfiguracion();
   const hemisferio = config.hemisferio || 'sur';
   const templado = calendario && calendario.templado;
@@ -115,6 +141,7 @@ async function renderFichaEspecie(id, root) {
         <div class="detalle-badges">
           <span class="badge">${escapeHtml(identidad.familia)}</span>
           <span class="badge tierra">${escapeHtml(etiquetaTipoSeguimiento(identidad.tipoSeguimiento))}</span>
+          ${origen && origen.estatus === 'nativa' ? '<span class="badge nativa">🌿 Nativa</span>' : ''}
         </div>
       </div>
     </div>
@@ -125,7 +152,11 @@ async function renderFichaEspecie(id, root) {
         <li>${escapeHtml(identidad.ciclo)}</li>
         <li>${escapeHtml(identidad.tipoCrecimiento)}</li>
         ${identidad.estrato ? `<li>Estrato: ${escapeHtml(identidad.estrato)}</li>` : ''}
+        ${identidad.organoCosechado ? `<li>Se aprovecha: ${escapeHtml(identidad.organoCosechado)}</li>` : ''}
+        ${origen && origen.estatus ? `<li>${escapeHtml(etiquetaOrigen(origen))}</li>` : ''}
       </ul>
+      ${identidad.aliases && identidad.aliases.length ? `<p class="ficha-aliases">También conocida como: ${escapeHtml(identidad.aliases.join(', '))}</p>` : ''}
+      ${identidad.notaTaxonomica ? `<p class="ficha-nota-taxonomica">⚠️ ${escapeHtml(identidad.notaTaxonomica)}</p>` : ''}
     </section>
 
     <section class="ficha-seccion">

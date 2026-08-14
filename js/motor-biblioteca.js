@@ -21,24 +21,64 @@ const CATEGORIAS_BIBLIOTECA = [
   { id: 'aromatica', label: 'Aromáticas' },
   { id: 'servicio', label: 'Servicio' },
   { id: 'agroforestal', label: 'Agroforestales' },
+  // Nativas NO es una categoría botánica más (una especie nativa puede ser
+  // a la vez "fruto", "aromática", "agroforestal", etc.) — es un corte
+  // transversal sobre el mismo listado, derivado de especie.origen.estatus.
+  // Se resuelve con un caso especial en filtrarBiblioteca() en vez de
+  // agregar 'nativa' a identidad.categorias de cada especie, para no
+  // duplicar esa información en dos lugares distintos.
+  { id: 'nativas', label: '🌿 Nativas' },
 ];
 
 function listarEspeciesBiblioteca() {
   return BIBLIOTECA_ESPECIES;
 }
 
-// Filtra por texto libre (nombre común o científico) y por categoría.
-// categoriaId 'todos' (o vacío) no filtra por categoría.
+// Filtra por texto libre (nombre común, alias o nombre científico) y por
+// categoría. categoriaId 'todos' (o vacío) no filtra por categoría.
+// categoriaId 'nativas' es un caso especial: en vez de mirar
+// identidad.categorias, filtra por origen.estatus === 'nativa' (ver nota
+// arriba, en CATEGORIAS_BIBLIOTECA).
 function filtrarBiblioteca(query, categoriaId) {
   const norm = normalizarTexto(query);
   return BIBLIOTECA_ESPECIES.filter((esp) => {
-    const enCategoria = !categoriaId || categoriaId === 'todos' || (esp.identidad.categorias || []).includes(categoriaId);
+    let enCategoria;
+    if (!categoriaId || categoriaId === 'todos') {
+      enCategoria = true;
+    } else if (categoriaId === 'nativas') {
+      enCategoria = esp.origen && esp.origen.estatus === 'nativa';
+    } else {
+      enCategoria = (esp.identidad.categorias || []).includes(categoriaId);
+    }
     if (!enCategoria) return false;
     if (!norm) return true;
     const nombre = normalizarTexto(esp.identidad.nombre);
     const cientifico = normalizarTexto(esp.identidad.nombreCientifico);
-    return nombre.includes(norm) || cientifico.includes(norm);
+    const aliases = esp.identidad.aliases || [];
+    if (nombre.includes(norm) || cientifico.includes(norm)) return true;
+    return aliases.some((a) => normalizarTexto(a).includes(norm));
   }).sort((a, b) => a.identidad.nombre.localeCompare(b.identidad.nombre, 'es'));
+}
+
+// ---------------------------------------------------------------------
+// Alias → especie: usado por views/detalle.js para encontrar la ficha de
+// Biblioteca correspondiente a un cultivo real ya registrado, cubriendo
+// las ~102 especies (no solo las ~28 que preguntas-cultivos.js reconoce
+// para el motor de preguntas interactivas — ese archivo no se toca acá,
+// sigue siendo la fuente para las preguntas con opciones/cooldown). Busca
+// por id exacto, por nombre normalizado, y por cualquier alias.
+// ---------------------------------------------------------------------
+function buscarEspecieBibliotecaPorNombre(nombreOId) {
+  if (!nombreOId) return null;
+  const directo = getEspecie(nombreOId);
+  if (directo) return directo;
+  const norm = normalizarTexto(nombreOId);
+  if (!norm) return null;
+  return BIBLIOTECA_ESPECIES.find((esp) => {
+    if (normalizarTexto(esp.identidad.nombre) === norm) return true;
+    if (normalizarTexto(esp.id) === norm) return true;
+    return (esp.identidad.aliases || []).some((a) => normalizarTexto(a) === norm);
+  }) || null;
 }
 
 // ---------------------------------------------------------------------
@@ -98,6 +138,7 @@ function obtenerTrasplanteDiasLibreria(especieId) {
 window.CATEGORIAS_BIBLIOTECA = CATEGORIAS_BIBLIOTECA;
 window.listarEspeciesBiblioteca = listarEspeciesBiblioteca;
 window.filtrarBiblioteca = filtrarBiblioteca;
+window.buscarEspecieBibliotecaPorNombre = buscarEspecieBibliotecaPorNombre;
 window.etiquetaVentanaMes = etiquetaVentanaMes;
 window.estadoVentanaMes = estadoVentanaMes;
 window.obtenerSiembraLibreria = obtenerSiembraLibreria;

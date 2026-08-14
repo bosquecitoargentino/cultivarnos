@@ -3,15 +3,17 @@
 // categorías, sin filtros complejos (ver motor-biblioteca.js).
 
 function especieCardHtml(especie) {
-  const { id, identidad, visual } = especie;
+  const { id, identidad, visual, origen } = especie;
   const categoriaLabel = (CATEGORIAS_BIBLIOTECA.find((c) => identidad.categorias.includes(c.id)) || {}).label || '';
   const ciclo = identidad.ciclo ? identidad.ciclo.split('(')[0].split(',')[0].trim() : '';
   const meta = [categoriaLabel, ciclo].filter(Boolean).join(' · ');
+  const esNativa = origen && origen.estatus === 'nativa';
 
   return `
     <div class="especie-card" data-id="${id}">
       <div class="especie-card-photo" style="${visual.imagen ? `background-image:url('${visual.imagen}')` : ''}">
         ${visual.imagen ? '' : (visual.icono || '🌿')}
+        ${esNativa ? '<span class="especie-card-nativa" title="Especie nativa">🌿</span>' : ''}
       </div>
       <div class="especie-card-body">
         <div class="especie-card-nombre">${escapeHtml(identidad.nombre)}</div>
