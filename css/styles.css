@@ -981,6 +981,26 @@ section + section { margin-top: 20px; }
   color: var(--texto-suave);
   line-height: 1.4;
 }
+.config-footer { margin-top: 4px; }
+.config-version {
+  font-size: 12px;
+  color: var(--texto-suave);
+  text-align: center;
+  opacity: 0.7;
+}
+.config-respaldo-fecha {
+  font-size: 12px;
+  color: var(--texto-suave);
+  margin-top: 6px;
+}
+.config-import-link {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--verde);
+  cursor: pointer;
+}
 
 /* ---------- Calendario de temporada ---------- */
 .calendario-nav {
@@ -1045,6 +1065,42 @@ section + section { margin-top: 20px; }
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.hidden { display: none; }
+#f-metodo-siembra.hidden { display: none; }
+
+/* ---------- Aviso de nueva versión ---------- */
+.update-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(88px + var(--safe-bottom));
+  z-index: 210;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--verde-oscuro);
+  color: #fff;
+  padding: 12px 10px 12px 16px;
+  border-radius: var(--radio-chico);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.28);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.update-banner.show { opacity: 1; transform: translateY(0); }
+.update-banner.hidden { display: none; }
+.update-banner-texto { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; }
+.update-banner-botones { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.update-banner .pill-btn { background: #fff; color: var(--verde-oscuro); font-weight: 700; }
+.update-banner-cerrar {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.8);
+  font-size: 15px;
+  padding: 4px 6px;
+  cursor: pointer;
+  line-height: 1;
+}
 
 /* ---------- Qué observar ahora / Revisión guiada ---------- */
 .observar-vacio {
@@ -1233,4 +1289,68 @@ button.link-ver-todas:active { transform: scale(0.98); }
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* ---------- Seguimiento de siembra ---------- */
+.siembra-card {
+  background: var(--crema-card);
+  border-radius: var(--radio);
+  padding: 14px;
+  box-shadow: var(--sombra);
+}
+.siembra-card-titulo {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--verde-oscuro);
+  margin-bottom: 10px;
+}
+.siembra-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 10px;
+}
+.siembra-tile { text-align: center; }
+.siembra-tile-valor {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--verde-oscuro);
+  line-height: 1.1;
+}
+.siembra-tile-label {
+  font-size: 11px;
+  color: var(--texto-suave);
+  margin-top: 2px;
+}
+.siembra-todo-trasplantado {
+  font-size: 13px;
+  color: var(--texto);
+  line-height: 1.4;
+  margin: 0;
+}
+.siembra-acciones {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--borde);
+}
+.siembra-modal-info {
+  font-size: 12px;
+  color: var(--texto-suave);
+  margin: 6px 0 0;
+}
+.siembra-modal-error {
+  font-size: 12px;
+  color: var(--alerta);
+  font-weight: 600;
+  margin: 8px 0 0;
+}
+.siembra-modal-error.hidden { display: none; }
+.siembra-destinos-sugeridos { margin-top: 8px; }
+.timeline-siembra {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--verde-oscuro);
+  font-weight: 500;
 }

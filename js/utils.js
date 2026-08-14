@@ -13,6 +13,7 @@ const EVENTO_TIPOS = [
   { value: 'fotografia', label: 'Fotografía', icon: '📷' },
   { value: 'germinacion', label: 'Germinación', icon: '🌱' },
   { value: 'trasplante', label: 'Trasplante', icon: '🪴' },
+  { value: 'baja', label: 'Baja / pérdida', icon: '💔' },
   { value: 'poda', label: 'Poda', icon: '✂️' },
   { value: 'floracion', label: 'Floración', icon: '🌸' },
   { value: 'cosecha', label: 'Cosecha', icon: '🧺' },
@@ -303,6 +304,59 @@ async function openFotoLightbox(fotos, startIndex) {
   observer.observe(backdrop, { attributes: true, attributeFilter: ['class'] });
 
   paint();
+}
+
+// ---------------------------------------------------------------------
+// Versión de la app: la única fuente de verdad es la constante APP_VERSION
+// dentro de sw.js (ver el comentario ahí para el porqué). Acá simplemente
+// la consultamos en tiempo de ejecución vía postMessage, para que
+// Configuración pueda mostrarla sin duplicar el número en ningún otro
+// archivo.
+function obtenerVersionApp() {
+  return new Promise((resolve) => {
+    if (!('serviceWorker' in navigator)) { resolve(null); return; }
+    navigator.serviceWorker.ready
+      .then((registration) => {
+        const worker = registration.active;
+        if (!worker) { resolve(null); return; }
+        const channel = new MessageChannel();
+        const timeout = setTimeout(() => resolve(null), 1500);
+        channel.port1.onmessage = (event) => {
+          clearTimeout(timeout);
+          resolve((event.data && event.data.version) || null);
+        };
+        worker.postMessage({ type: 'GET_VERSION' }, [channel.port2]);
+      })
+      .catch(() => resolve(null));
+  });
+}
+
+// ---------------------------------------------------------------------
+// Respaldo (exportar/importar) — únicas funciones que tocan esto, para no
+// dispersar la misma lógica entre el menú superior y Configuración.
+// exportarRespaldo() NO guarda una copia del backup en IndexedDB: solo
+// anota la fecha/hora del último respaldo exitoso (config.ultimoRespaldo),
+// para poder mostrarla en Configuración.
+// ---------------------------------------------------------------------
+async function exportarRespaldo() {
+  const data = await DB.exportAll();
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const fecha = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `cultivarnos-backup-${fecha}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  await DB.setConfiguracion({ ultimoRespaldo: new Date().toISOString() });
+}
+
+async function importarRespaldoDesdeArchivo(file) {
+  const text = await file.text();
+  const data = JSON.parse(text);
+  await DB.importAll(data, { replace: true });
 }
 
 function escapeHtml(str) {

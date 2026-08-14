@@ -23,6 +23,13 @@ async function renderDetalle(id, root) {
   const dias = diasDesde(cultivo.fechaInicio);
   const pendientes = recordatorios.filter((r) => r.estado === 'pendiente');
 
+  // Seguimiento de siembra: pura derivación de los eventos (ver
+  // motor-siembra.js) — nada de esto se guarda aparte. Si el cultivo nunca
+  // cargó una cantidad sembrada, resumen.activo queda en false y esta
+  // sección completa se omite, tal cual funcionaba antes de esta función.
+  const resumenSiembra = calcularResumenSiembra(cultivo, eventos);
+  const anotacionesSiembra = calcularAnotacionesHistorialSiembra(eventos);
+
   // Qué observar ahora: motor local, sin IA — no tiene sentido seguir
   // sugiriendo observaciones sobre un cultivo ya finalizado.
   const observar = cultivo.estado === 'finalizado'
@@ -52,6 +59,8 @@ async function renderDetalle(id, root) {
       <button id="btn-add-recordatorio">⏰ Recordatorio</button>
       <button id="btn-toggle-estado">${cultivo.estado === 'finalizado' ? '↩️ Reactivar' : '🏁 Finalizar'}</button>
     </div>
+
+    <section id="siembra-section"></section>
 
     ${cultivo.estado !== 'finalizado' ? `
     <section>
@@ -84,6 +93,12 @@ async function renderDetalle(id, root) {
       <button id="btn-eliminar" class="btn-danger" style="margin-top:8px;">Eliminar cultivo</button>
     </section>
   `;
+
+  // Seguimiento de siembra: tarjeta resumen + accesos directos a
+  // germinación/trasplante/baja, o el link retroactivo si el cultivo
+  // todavía no tiene datos cuantitativos cargados.
+  const siembraWrap = root.querySelector('#siembra-section');
+  pintarSeguimientoSiembra(siembraWrap, cultivo, resumenSiembra, () => renderDetalle(id, root));
 
   // Recordatorios pendientes
   if (pendientes.length) {
@@ -153,7 +168,7 @@ async function renderDetalle(id, root) {
           // Si hay una oferta (acción o recordatorio sugerido), esperamos su
           // confirmación antes de refrescar la ficha, para que la persona
           // pueda verla y decidir sin que la pantalla se mueva debajo suyo.
-          mostrarOfertaEnItem(item, oferta, id, () => renderDetalle(id, root));
+          mostrarOfertaEnItem(item, oferta, id, () => renderDetalle(id, root), resumenSiembra);
         } else {
           item.classList.add('resuelto');
           // Refresca la ficha para que la respuesta quede visible en el
@@ -185,7 +200,7 @@ async function renderDetalle(id, root) {
   if (!eventos.length) {
     timelineWrap.innerHTML = `<div class="empty-state"><span class="emoji">📖</span>Todavía no hay eventos registrados.</div>`;
   } else {
-    const items = await Promise.all(eventos.map((ev) => renderTimelineItem(ev, fotos)));
+    const items = await Promise.all(eventos.map((ev) => renderTimelineItem(ev, fotos, anotacionesSiembra)));
     timelineWrap.innerHTML = `<div class="timeline">${items.join('')}</div>`;
     timelineWrap.addEventListener('click', async (e) => {
       const deleteBtn = e.target.closest('.timeline-delete');
@@ -227,9 +242,10 @@ async function renderDetalle(id, root) {
   });
 }
 
-async function renderTimelineItem(ev, fotos) {
+async function renderTimelineItem(ev, fotos, anotacionesSiembra) {
   const fotoUrl = await fotoUrlCache.getUrl(ev.fotoId);
   const fotoIndex = fotoUrl ? fotos.findIndex((f) => f.eventoId === ev.id) : -1;
+  const lineaSiembra = anotacionesSiembra ? lineaSiembraParaEvento(ev, anotacionesSiembra) : null;
   return `
     <div class="timeline-item">
       <div class="timeline-card">
@@ -238,6 +254,7 @@ async function renderTimelineItem(ev, fotos) {
           <span>${eventoLabel(ev.tipo)}</span>
           <span class="timeline-fecha">${formatFecha(ev.fecha)}</span>
         </div>
+        ${lineaSiembra ? `<div class="timeline-siembra">${escapeHtml(lineaSiembra)}</div>` : ''}
         ${ev.respuestas && ev.respuestas.length ? `
         <div class="timeline-respuestas">
           ${ev.respuestas.map((r) => `<div class="timeline-respuesta"><strong>${escapeHtml(r.etiqueta)}:</strong> ${escapeHtml(r.respuesta)}</div>`).join('')}
@@ -248,6 +265,406 @@ async function renderTimelineItem(ev, fotos) {
       </div>
     </div>
   `;
+}
+
+// Arma la línea narrativa de un evento de siembra/germinación/trasplante/
+// baja a partir de los totales acumulados que ya calculó
+// calcularAnotacionesHistorialSiembra — así el historial cuenta la
+// historia completa del lote (punto 22 del pedido).
+function lineaSiembraParaEvento(ev, anotaciones) {
+  if (ev.tipo === 'siembra' && ev.cantidad != null) {
+    return `${ev.cantidad} unidad${ev.cantidad === 1 ? '' : 'es'} sembrada${ev.cantidad === 1 ? '' : 's'}.`;
+  }
+  const a = anotaciones.get(ev.id);
+  if (!a) return null;
+  if (a.tipo === 'germinacion') {
+    const totalTxt = a.sembradas != null ? `${a.totalGerminadas}/${a.sembradas}` : `${a.totalGerminadas}`;
+    const pctTxt = a.pct != null ? ` · ${a.pct}%` : '';
+    return `${a.nuevas} nueva${a.nuevas === 1 ? '' : 's'} germinaci${a.nuevas === 1 ? 'ón' : 'ones'}. Total: ${totalTxt}${pctTxt}.`;
+  }
+  if (a.tipo === 'trasplante') {
+    const destinoTxt = a.destino ? ` a ${a.destino}` : '';
+    const quedanTxt = a.enOrigen != null ? ` Quedan ${a.enOrigen} disponibles.` : '';
+    return `${a.cantidad} planta${a.cantidad === 1 ? '' : 's'} trasladada${a.cantidad === 1 ? '' : 's'}${destinoTxt}.${quedanTxt}`;
+  }
+  if (a.tipo === 'baja') {
+    const motivoTxt = a.motivo ? ` (${etiquetaMotivoBaja(a.motivo) || a.motivo})` : '';
+    const origenTxt = a.origen === 'destino' ? ' en lugar definitivo' : ' en semillero';
+    return `${a.cantidad} baja${a.cantidad === 1 ? '' : 's'}${origenTxt}${motivoTxt}.`;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------
+// Seguimiento de siembra — tarjeta resumen + accesos a germinación /
+// trasplante / baja. Capa de presentación pura: toda la aritmética vive en
+// motor-siembra.js, acá solo se pinta y se piden confirmaciones.
+// ---------------------------------------------------------------------
+
+function pintarSeguimientoSiembra(wrap, cultivo, resumen, onChange) {
+  if (!resumen.activo) {
+    if (!puedeAgregarDatosSiembra(cultivo, resumen)) {
+      wrap.innerHTML = '';
+      return;
+    }
+    wrap.innerHTML = `<button type="button" id="btn-agregar-siembra" class="link-ver-todas">＋ Agregar datos de siembra</button>`;
+    wrap.querySelector('#btn-agregar-siembra').addEventListener('click', () => {
+      abrirModalAgregarSiembra(cultivo, onChange);
+    });
+    return;
+  }
+
+  const tiles = [{ valor: resumen.sembradas, label: 'sembradas' }];
+  if (!resumen.sinGerminacion) {
+    tiles.push({ valor: resumen.germinadas, label: 'germinadas' });
+    if (resumen.pctGerminacion != null) tiles.push({ valor: `${resumen.pctGerminacion}%`, label: 'germinación' });
+  }
+  if (resumen.muestraSemillero && resumen.germinadas > 0) {
+    tiles.push({ valor: resumen.enOrigen, label: 'en semillero' });
+  }
+  if (resumen.trasplantadas > 0) {
+    tiles.push({ valor: resumen.trasplantadas, label: 'trasplantadas' });
+  }
+  if (resumen.bajas > 0) {
+    tiles.push({ valor: resumen.bajas, label: 'bajas' });
+  }
+
+  const puedeGerminar = !resumen.sinGerminacion && resumen.germinadas < resumen.sembradas;
+  const puedeTrasplantar = resumen.enOrigen > 0;
+  const puedeBaja = resumen.enOrigen > 0 || resumen.enDestino > 0;
+
+  wrap.innerHTML = `
+    <div class="siembra-card">
+      <div class="siembra-card-titulo">Seguimiento de siembra 🌱</div>
+      ${resumen.todoTrasplantado
+        ? `<p class="siembra-todo-trasplantado">🌱 Todo el lote germinado ya pasó a lugar definitivo.</p>`
+        : `<div class="siembra-tiles">${tiles.map((t) => `
+            <div class="siembra-tile">
+              <div class="siembra-tile-valor">${escapeHtml(String(t.valor))}</div>
+              <div class="siembra-tile-label">${escapeHtml(t.label)}</div>
+            </div>`).join('')}</div>`
+      }
+      ${(puedeGerminar || puedeTrasplantar || puedeBaja) ? `
+      <div class="siembra-acciones">
+        ${puedeGerminar ? `<button type="button" class="pill-btn" data-accion="germinacion">＋ Germinación</button>` : ''}
+        ${puedeTrasplantar ? `<button type="button" class="pill-btn" data-accion="trasplante">＋ Trasplante</button>` : ''}
+        ${puedeBaja ? `<button type="button" class="pill-btn" data-accion="baja">＋ Baja</button>` : ''}
+      </div>` : ''}
+    </div>
+  `;
+
+  const accionesWrap = wrap.querySelector('.siembra-acciones');
+  if (accionesWrap) {
+    accionesWrap.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-accion]');
+      if (!btn) return;
+      if (btn.dataset.accion === 'germinacion') abrirModalGerminacion(cultivo.id, resumen, onChange);
+      if (btn.dataset.accion === 'trasplante') abrirModalTrasplante(cultivo.id, resumen, onChange);
+      if (btn.dataset.accion === 'baja') abrirModalBaja(cultivo.id, resumen, onChange);
+    });
+  }
+}
+
+// ¿Cuántas nuevas germinaron? — mobile-first: muestra en vivo "ya habían
+// germinado X, después de esto Y de Z" a medida que se escribe, y valida
+// contra el máximo posible antes de guardar (nunca más que lo sembrado).
+function abrirModalGerminacion(cultivoId, resumen, onDone) {
+  const { backdrop, close } = createModal(`
+    <div class="modal-sheet">
+      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <h2>Germinación</h2>
+      <div class="form-group">
+        <label class="form-label">¿Cuántas nuevas germinaron?</label>
+        <input type="number" id="germ-cantidad" class="form-input" min="1" step="1" inputmode="numeric" placeholder="Ej: 5" />
+      </div>
+      <p class="siembra-modal-info" id="germ-info"></p>
+      <p class="siembra-modal-error hidden" id="germ-error"></p>
+      <button type="button" id="germ-guardar" class="btn-primary">Guardar</button>
+    </div>
+  `);
+  backdrop.querySelector('#modal-close').addEventListener('click', close);
+
+  const input = backdrop.querySelector('#germ-cantidad');
+  const info = backdrop.querySelector('#germ-info');
+  const errorEl = backdrop.querySelector('#germ-error');
+
+  function actualizarPreview() {
+    const n = parseInt(input.value, 10);
+    if (Number.isFinite(n) && n > 0) {
+      info.textContent = `Ya habían germinado: ${resumen.germinadas} · Después de esto: ${resumen.germinadas + n} de ${resumen.sembradas}`;
+    } else {
+      info.textContent = `Ya habían germinado: ${resumen.germinadas} de ${resumen.sembradas}`;
+    }
+  }
+  input.addEventListener('input', () => {
+    errorEl.classList.add('hidden');
+    actualizarPreview();
+  });
+  actualizarPreview();
+  input.focus({ preventScroll: true });
+
+  backdrop.querySelector('#germ-guardar').addEventListener('click', async () => {
+    const n = parseInt(input.value, 10);
+    const validacion = validarCantidadGerminacion(resumen, n);
+    if (!validacion.ok) {
+      errorEl.textContent = validacion.mensaje;
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    await DB.addEvento({ cultivoId, tipo: 'germinacion', fecha: todayIsoDate(), cantidad: n });
+    close();
+    showToast('Germinación registrada 🌱');
+    onDone();
+  });
+}
+
+// Trasplante parcial: cantidad + destino libre (reutiliza destinos ya
+// usados como sugerencia rápida). Valida contra lo disponible en el
+// semillero/origen antes de guardar.
+function abrirModalTrasplante(cultivoId, resumen, onDone) {
+  const sugerencias = resumen.destinos.map((d) => d.destino).filter((d) => d !== 'Sin destino especificado').slice(0, 4);
+  const { backdrop, close } = createModal(`
+    <div class="modal-sheet">
+      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <h2>Trasplante</h2>
+      <div class="form-group">
+        <label class="form-label">Cantidad trasplantada</label>
+        <input type="number" id="tra-cantidad" class="form-input" min="1" step="1" inputmode="numeric" placeholder="Ej: 10" />
+        <p class="siembra-modal-info">Disponibles: ${resumen.enOrigen}</p>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Destino <span class="optional">(opcional)</span></label>
+        <input type="text" id="tra-destino" class="form-input" placeholder="Ej: Bancal 2, Maceta, Invernadero..." autocomplete="off" />
+        ${sugerencias.length ? `<div class="chip-group siembra-destinos-sugeridos" id="tra-destino-sugeridos">${sugerencias.map((d) => `<div class="chip-option" data-value="${escapeHtml(d)}">${escapeHtml(d)}</div>`).join('')}</div>` : ''}
+      </div>
+      <p class="siembra-modal-error hidden" id="tra-error"></p>
+      <button type="button" id="tra-guardar" class="btn-primary">Guardar</button>
+    </div>
+  `);
+  backdrop.querySelector('#modal-close').addEventListener('click', close);
+
+  const cantidadInput = backdrop.querySelector('#tra-cantidad');
+  const destinoInput = backdrop.querySelector('#tra-destino');
+  const errorEl = backdrop.querySelector('#tra-error');
+  cantidadInput.focus({ preventScroll: true });
+  cantidadInput.addEventListener('input', () => errorEl.classList.add('hidden'));
+
+  const sugeridosWrap = backdrop.querySelector('#tra-destino-sugeridos');
+  if (sugeridosWrap) {
+    sugeridosWrap.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip-option');
+      if (!chip) return;
+      destinoInput.value = chip.dataset.value;
+    });
+  }
+
+  backdrop.querySelector('#tra-guardar').addEventListener('click', async () => {
+    const n = parseInt(cantidadInput.value, 10);
+    const validacion = validarCantidadTrasplante(resumen, n);
+    if (!validacion.ok) {
+      errorEl.textContent = validacion.mensaje;
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    const destino = destinoInput.value.trim() || null;
+    await DB.addEvento({ cultivoId, tipo: 'trasplante', fecha: todayIsoDate(), cantidad: n, destino });
+    close();
+    showToast('Trasplante registrado 🪴');
+
+    // Mismo recordatorio de seguimiento que ya se ofrece para cualquier
+    // evento de trasplante (motor-observacion.js) — nunca se crea sin
+    // confirmación explícita.
+    const sugerencia = sugerenciaRecordatorioPorEvento('trasplante');
+    if (sugerencia) {
+      abrirSugerenciaRecordatorioStandalone(cultivoId, sugerencia, onDone);
+    } else {
+      onDone();
+    }
+  });
+}
+
+// Baja / pérdida: cantidad + de dónde (si hay unidades en más de un lugar)
+// + motivo opcional. Sin diagnóstico, solo registro (punto 16 del pedido).
+function abrirModalBaja(cultivoId, resumen, onDone) {
+  const opciones = [];
+  if (resumen.enOrigen > 0) opciones.push({ value: 'origen', label: resumen.muestraSemillero ? 'Semillero' : 'Donde estaban' });
+  if (resumen.enDestino > 0) opciones.push({ value: 'destino', label: 'Lugar definitivo' });
+  let origenSeleccionado = opciones.length ? opciones[0].value : 'origen';
+  let motivoSeleccionado = null;
+
+  const { backdrop, close } = createModal(`
+    <div class="modal-sheet">
+      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <h2>Baja / pérdida</h2>
+      <div class="form-group">
+        <label class="form-label">Cantidad</label>
+        <input type="number" id="baja-cantidad" class="form-input" min="1" step="1" inputmode="numeric" placeholder="Ej: 2" />
+      </div>
+      ${opciones.length > 1 ? `
+      <div class="form-group">
+        <label class="form-label">¿De dónde?</label>
+        <div class="chip-group" id="baja-origen">
+          ${opciones.map((o, i) => `<div class="chip-option ${i === 0 ? 'selected' : ''}" data-value="${o.value}">${escapeHtml(o.label)}</div>`).join('')}
+        </div>
+      </div>` : ''}
+      <p class="siembra-modal-info" id="baja-info"></p>
+      <div class="form-group">
+        <label class="form-label">Motivo <span class="optional">(opcional)</span></label>
+        <div class="chip-group" id="baja-motivo">
+          ${MOTIVOS_BAJA.map((m) => `<div class="chip-option" data-value="${m.value}">${escapeHtml(m.label)}</div>`).join('')}
+        </div>
+      </div>
+      <p class="siembra-modal-error hidden" id="baja-error"></p>
+      <button type="button" id="baja-guardar" class="btn-primary">Guardar</button>
+    </div>
+  `);
+  backdrop.querySelector('#modal-close').addEventListener('click', close);
+
+  const cantidadInput = backdrop.querySelector('#baja-cantidad');
+  const errorEl = backdrop.querySelector('#baja-error');
+  const infoEl = backdrop.querySelector('#baja-info');
+  cantidadInput.focus({ preventScroll: true });
+  cantidadInput.addEventListener('input', () => errorEl.classList.add('hidden'));
+
+  function actualizarInfo() {
+    const disponible = origenSeleccionado === 'destino' ? resumen.enDestino : resumen.enOrigen;
+    infoEl.textContent = `Disponibles ahí: ${disponible}`;
+  }
+  actualizarInfo();
+
+  const origenGroup = backdrop.querySelector('#baja-origen');
+  if (origenGroup) {
+    origenGroup.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip-option');
+      if (!chip) return;
+      origenGroup.querySelectorAll('.chip-option').forEach((c) => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      origenSeleccionado = chip.dataset.value;
+      actualizarInfo();
+    });
+  }
+
+  backdrop.querySelector('#baja-motivo').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip-option');
+    if (!chip) return;
+    const grupo = backdrop.querySelector('#baja-motivo');
+    const yaSeleccionado = chip.classList.contains('selected');
+    grupo.querySelectorAll('.chip-option').forEach((c) => c.classList.remove('selected'));
+    motivoSeleccionado = yaSeleccionado ? null : chip.dataset.value;
+    if (motivoSeleccionado) chip.classList.add('selected');
+  });
+
+  backdrop.querySelector('#baja-guardar').addEventListener('click', async () => {
+    const n = parseInt(cantidadInput.value, 10);
+    const validacion = validarCantidadBaja(resumen, n, origenSeleccionado);
+    if (!validacion.ok) {
+      errorEl.textContent = validacion.mensaje;
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    await DB.addEvento({ cultivoId, tipo: 'baja', fecha: todayIsoDate(), cantidad: n, origen: origenSeleccionado, motivo: motivoSeleccionado });
+    close();
+    showToast('Baja registrada');
+    onDone();
+  });
+}
+
+// Alta retroactiva de datos de siembra para cultivos ya existentes que
+// nunca cargaron cantidad (punto 30 del pedido) — nunca se asume ni se
+// completa nada automáticamente.
+function abrirModalAgregarSiembra(cultivo, onDone) {
+  const esSemilla = cultivo.tipoInicio === 'semilla';
+  let metodoSeleccionado = 'semillero';
+
+  const { backdrop, close } = createModal(`
+    <div class="modal-sheet">
+      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <h2>Agregar datos de siembra</h2>
+      ${esSemilla ? `
+      <div class="form-group">
+        <label class="form-label">¿Cómo empezó?</label>
+        <div class="chip-group" id="agregar-metodo">
+          <div class="chip-option selected" data-value="semillero">Semillero</div>
+          <div class="chip-option" data-value="directa">Siembra directa</div>
+        </div>
+      </div>` : ''}
+      <div class="form-group">
+        <label class="form-label">${esSemilla ? 'Unidades sembradas' : 'Cantidad inicial'}</label>
+        <input type="number" id="agregar-cantidad" class="form-input" min="1" step="1" inputmode="numeric" placeholder="Ej: 20" />
+      </div>
+      <p class="siembra-modal-error hidden" id="agregar-error"></p>
+      <button type="button" id="agregar-guardar" class="btn-primary">Guardar</button>
+    </div>
+  `);
+  backdrop.querySelector('#modal-close').addEventListener('click', close);
+
+  const metodoGroup = backdrop.querySelector('#agregar-metodo');
+  if (metodoGroup) {
+    metodoGroup.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip-option');
+      if (!chip) return;
+      metodoGroup.querySelectorAll('.chip-option').forEach((c) => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      metodoSeleccionado = chip.dataset.value;
+    });
+  }
+
+  const input = backdrop.querySelector('#agregar-cantidad');
+  const errorEl = backdrop.querySelector('#agregar-error');
+  input.focus({ preventScroll: true });
+  input.addEventListener('input', () => errorEl.classList.add('hidden'));
+
+  backdrop.querySelector('#agregar-guardar').addEventListener('click', async () => {
+    const n = parseInt(input.value, 10);
+    if (!Number.isFinite(n) || n <= 0) {
+      errorEl.textContent = 'Ingresá una cantidad mayor a 0.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    if (esSemilla) {
+      await DB.updateCultivo(cultivo.id, { metodoSiembra: metodoSeleccionado });
+    }
+    const eventos = await DB.getEventosByCultivo(cultivo.id);
+    const eventoSiembra = eventos.find((e) => e.tipo === 'siembra');
+    if (eventoSiembra) {
+      await DB.updateEvento(eventoSiembra.id, { cantidad: n });
+    } else {
+      await DB.addEvento({ cultivoId: cultivo.id, tipo: 'siembra', fecha: todayIsoDate(), cantidad: n });
+    }
+    close();
+    showToast('Datos de siembra agregados 🌱');
+    onDone();
+  });
+}
+
+// Modal chico standalone para ofrecer un recordatorio de seguimiento
+// (misma idea que mostrarSugerenciaRecordatorioEnModal, pero sin depender
+// de un modal ya abierto — nuestros modales de cantidad ya se cerraron
+// antes de ofrecer esto).
+function abrirSugerenciaRecordatorioStandalone(cultivoId, sugerencia, onDone) {
+  const { backdrop, close } = createModal(`
+    <div class="modal-sheet">
+      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div class="sugerencia-evento">
+        <div class="sugerencia-evento-icono">🌱</div>
+        <div class="sugerencia-evento-texto">¿Querés que te recuerde<br /><strong>"${escapeHtml(sugerencia.titulo)}"</strong><br />en ${sugerencia.dias} días?</div>
+        <div class="sugerencia-evento-botones">
+          <button type="button" id="sugerencia-si" class="btn-primary">Sí, recordarme</button>
+          <button type="button" id="sugerencia-no" class="btn-secondary">No, gracias</button>
+        </div>
+      </div>
+    </div>
+  `);
+  function terminar() { close(); if (onDone) onDone(); }
+  backdrop.querySelector('#modal-close').addEventListener('click', terminar);
+  backdrop.querySelector('#sugerencia-no').addEventListener('click', terminar);
+  backdrop.querySelector('#sugerencia-si').addEventListener('click', async () => {
+    const fecha = new Date();
+    fecha.setDate(fecha.getDate() + sugerencia.dias);
+    await DB.addRecordatorio({ cultivoId, titulo: sugerencia.titulo, fecha: fecha.toISOString().slice(0, 10), estado: 'pendiente' });
+    showToast('Recordatorio creado');
+    terminar();
+  });
 }
 
 // ---------------------------------------------------------------------
@@ -318,7 +735,25 @@ function construirOferta(pregunta, respuesta) {
 // tanto si se confirma como si se descarta, para refrescar la ficha recién
 // ahí (así la persona alcanza a ver y decidir la oferta antes de que la
 // pantalla se actualice).
-function mostrarOfertaEnItem(item, oferta, cultivoId, onDone) {
+// Si el cultivo tiene seguimiento cuantitativo activo y la oferta es de
+// germinación o trasplante, en vez de crear un evento vacío abrimos el
+// modal de cantidad correspondiente — así "¿Ya germinó?" -> "Sí" no
+// registra un evento sin datos cuando ya se está llevando la cuenta.
+// Devuelve true si intercepta la oferta (el llamador no debe hacer nada más).
+function intentarAbrirCantidadPorOferta(oferta, cultivoId, resumen, onDone) {
+  if (!resumen || !resumen.activo || oferta.tipo !== 'accion') return false;
+  if (oferta.eventoTipo === 'germinacion' && !resumen.sinGerminacion && resumen.germinadas < resumen.sembradas) {
+    abrirModalGerminacion(cultivoId, resumen, onDone);
+    return true;
+  }
+  if (oferta.eventoTipo === 'trasplante' && resumen.enOrigen > 0) {
+    abrirModalTrasplante(cultivoId, resumen, onDone);
+    return true;
+  }
+  return false;
+}
+
+function mostrarOfertaEnItem(item, oferta, cultivoId, onDone, resumenSiembra) {
   const div = document.createElement('div');
   div.className = 'observar-oferta';
   const label = oferta.tipo === 'accion' ? oferta.label : `Recordarme en ${oferta.dias} días: ${oferta.titulo}`;
@@ -331,6 +766,11 @@ function mostrarOfertaEnItem(item, oferta, cultivoId, onDone) {
   `;
   item.appendChild(div);
   div.querySelector('.oferta-confirmar').addEventListener('click', async () => {
+    if (intentarAbrirCantidadPorOferta(oferta, cultivoId, resumenSiembra, onDone)) {
+      div.remove();
+      item.classList.add('resuelto');
+      return;
+    }
     if (oferta.tipo === 'accion') {
       await DB.addEvento({ cultivoId, tipo: oferta.eventoTipo, fecha: todayIsoDate() });
       showToast('Evento registrado');

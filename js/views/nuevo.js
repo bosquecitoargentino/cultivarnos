@@ -4,6 +4,7 @@ function renderNuevo(root) {
   let fotoBlob = null;
   let fotoPreviewUrl = null;
   let tipoInicioSeleccionado = 'semilla';
+  let metodoSiembraSeleccionado = 'semillero';
 
   root.innerHTML = `
     <div class="view-header">
@@ -29,6 +30,16 @@ function renderNuevo(root) {
           <div class="chip-option" data-value="plantin">Plantín</div>
           <div class="chip-option" data-value="trasplante">Trasplante</div>
         </div>
+      </div>
+
+      <div class="form-group siembra-opcional" id="f-siembra-section">
+        <label class="form-label">Siembra <span class="optional">(opcional)</span></label>
+        <div class="chip-group" id="f-metodo-siembra">
+          <div class="chip-option selected" data-value="semillero">Semillero</div>
+          <div class="chip-option" data-value="directa">Siembra directa</div>
+        </div>
+        <div style="height:10px"></div>
+        <input type="number" id="f-cantidad-siembra" class="form-input" min="1" step="1" inputmode="numeric" placeholder="Unidades sembradas" />
       </div>
 
       <div class="form-group">
@@ -78,14 +89,40 @@ function renderNuevo(root) {
 
   root.querySelector('#f-fecha').value = todayIsoDate();
 
-  // Tipo de inicio chips
+  // Tipo de inicio chips — decide qué pide la sección "Siembra" de abajo:
+  // semilla ofrece elegir semillero/siembra directa + unidades sembradas;
+  // plantín y trasplante piden directamente una cantidad inicial (no hay
+  // etapa de germinación que registrar en esos casos).
   const tipoGroup = root.querySelector('#f-tipo-inicio');
+  const metodoGroup = root.querySelector('#f-metodo-siembra');
+  const cantidadInput = root.querySelector('#f-cantidad-siembra');
+
+  function actualizarSeccionSiembra() {
+    if (tipoInicioSeleccionado === 'semilla') {
+      metodoGroup.classList.remove('hidden');
+      cantidadInput.placeholder = 'Unidades sembradas';
+    } else {
+      metodoGroup.classList.add('hidden');
+      cantidadInput.placeholder = 'Cantidad inicial';
+    }
+  }
+  actualizarSeccionSiembra();
+
   tipoGroup.addEventListener('click', (e) => {
     const chip = e.target.closest('.chip-option');
     if (!chip) return;
     tipoGroup.querySelectorAll('.chip-option').forEach((c) => c.classList.remove('selected'));
     chip.classList.add('selected');
     tipoInicioSeleccionado = chip.dataset.value;
+    actualizarSeccionSiembra();
+  });
+
+  metodoGroup.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip-option');
+    if (!chip) return;
+    metodoGroup.querySelectorAll('.chip-option').forEach((c) => c.classList.remove('selected'));
+    chip.classList.add('selected');
+    metodoSiembraSeleccionado = chip.dataset.value;
   });
 
   // Recordatorio toggle
@@ -159,10 +196,19 @@ function renderNuevo(root) {
 
     const nota = root.querySelector('#f-nota').value.trim() || null;
 
+    // Cantidad sembrada: opcional, nunca se asume 1. Si no se carga nada,
+    // el cultivo queda exactamente como hasta ahora (sin seguimiento
+    // cuantitativo) — ver motor-siembra.js.
+    const cantidadRaw = cantidadInput.value.trim();
+    const cantidadSiembra = cantidadRaw ? parseInt(cantidadRaw, 10) : null;
+    const cantidadValida = Number.isFinite(cantidadSiembra) && cantidadSiembra > 0 ? cantidadSiembra : null;
+    const metodoSiembra = tipoInicioSeleccionado === 'semilla' ? metodoSiembraSeleccionado : null;
+
     const cultivoId = await DB.addCultivo({
       especie,
       variedad: root.querySelector('#f-variedad').value.trim() || null,
       tipoInicio: tipoInicioSeleccionado,
+      metodoSiembra,
       fechaInicio: fecha,
       ubicacion: root.querySelector('#f-ubicacion').value.trim() || null,
       fotoId,
@@ -178,6 +224,7 @@ function renderNuevo(root) {
       fecha,
       nota,
       fotoId,
+      cantidad: cantidadValida,
     });
 
     if (recCheck.checked) {

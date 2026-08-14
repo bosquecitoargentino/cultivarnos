@@ -118,7 +118,18 @@ const DB = {
     const store = await tx('eventos');
     const index = store.index('cultivoId');
     const result = await reqToPromise(index.getAll(IDBKeyRange.only(cultivoId)));
-    return result.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    // Más nuevo primero. `fecha` es un día (sin hora), así que varios
+    // eventos cargados el mismo día empatan ahí — desempatamos con
+    // createdAt (timestamp real de carga) y, como último recurso, el id
+    // autoincremental, para que el orden sea siempre determinístico y
+    // realmente cronológico entre eventos del mismo día.
+    return result.sort((a, b) => {
+      const porFecha = new Date(b.fecha) - new Date(a.fecha);
+      if (porFecha !== 0) return porFecha;
+      const porCreacion = new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+      if (porCreacion !== 0) return porCreacion;
+      return (b.id || 0) - (a.id || 0);
+    });
   },
 
   async updateEvento(id, changes) {

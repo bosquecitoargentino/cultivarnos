@@ -4,6 +4,7 @@
 
 async function renderConfiguracion(root) {
   const config = await DB.getConfiguracion();
+  const version = await obtenerVersionApp();
 
   root.innerHTML = `
     <div class="view-header view-header-compacto">
@@ -24,6 +25,19 @@ async function renderConfiguracion(root) {
     <section>
       <p class="config-nota">Más adelante vamos a poder afinar esto con región, clima y tipo de suelo.</p>
     </section>
+
+    <section>
+      <div class="section-title">Datos y respaldo</div>
+      <button type="button" id="config-btn-export" class="btn-secondary">⬇️ Exportar respaldo</button>
+      <p class="config-respaldo-fecha" id="config-respaldo-fecha">${textoUltimoRespaldo(config)}</p>
+      <label class="link-small config-import-link" for="config-input-import">⬆️ Importar respaldo</label>
+      <input type="file" id="config-input-import" accept="application/json" hidden />
+    </section>
+
+    ${version ? `
+    <section class="config-footer">
+      <p class="config-version">Cultivarnos · Versión ${escapeHtml(version)}</p>
+    </section>` : ''}
   `;
 
   const chipGroup = root.querySelector('#config-hemisferio');
@@ -71,6 +85,46 @@ async function renderConfiguracion(root) {
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
     );
   });
+
+  // Datos y respaldo — misma lógica compartida (utils.js) que usa el menú
+  // superior; acá solo agregamos el refresco de la fecha del último
+  // respaldo, que es lo nuevo de esta pantalla.
+  const respaldoFechaEl = root.querySelector('#config-respaldo-fecha');
+  root.querySelector('#config-btn-export').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      await exportarRespaldo();
+      const actual = await DB.getConfiguracion();
+      respaldoFechaEl.textContent = textoUltimoRespaldo(actual);
+      showToast('Respaldo exportado');
+    } catch (err) {
+      console.error(err);
+      showToast('Error al exportar');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  root.querySelector('#config-input-import').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const confirmMsg = 'Importar reemplazará todos los datos actuales por los del respaldo. ¿Continuar?';
+    if (!window.confirm(confirmMsg)) {
+      e.target.value = '';
+      return;
+    }
+    try {
+      await importarRespaldoDesdeArchivo(file);
+      showToast('Datos importados');
+      renderConfiguracion(root);
+    } catch (err) {
+      console.error(err);
+      showToast('Error al importar el archivo');
+    } finally {
+      e.target.value = '';
+    }
+  });
 }
 
 function textoEstadoUbicacion(config) {
@@ -78,4 +132,9 @@ function textoEstadoUbicacion(config) {
     return 'Todavía no guardaste tu ubicación. Podés elegir el hemisferio a mano, arriba.';
   }
   return `Ubicación aproximada guardada (${config.lat}, ${config.lon}).`;
+}
+
+function textoUltimoRespaldo(config) {
+  if (!config.ultimoRespaldo) return 'Todavía no hiciste un respaldo.';
+  return `Último respaldo: ${formatFecha(config.ultimoRespaldo)}`;
 }

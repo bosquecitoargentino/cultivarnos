@@ -47,12 +47,21 @@
 
 <div id="toast" class="toast hidden"></div>
 
+<div id="update-banner" class="update-banner hidden">
+  <span class="update-banner-texto">🌱 Nueva versión disponible</span>
+  <div class="update-banner-botones">
+    <button type="button" id="update-banner-btn" class="pill-btn">Actualizar ahora</button>
+    <button type="button" id="update-banner-cerrar" class="update-banner-cerrar" aria-label="Cerrar">✕</button>
+  </div>
+</div>
+
 <script src="js/utils.js"></script>
 <script src="js/db.js"></script>
 <script src="js/data/cultivos-data.js"></script>
 <script src="js/motor-estacional.js"></script>
 <script src="js/data/preguntas-cultivos.js"></script>
 <script src="js/motor-observacion.js"></script>
+<script src="js/motor-siembra.js"></script>
 <script src="js/views/inicio.js"></script>
 <script src="js/views/cultivos.js"></script>
 <script src="js/views/nuevo.js"></script>
@@ -69,17 +78,7 @@
   document.getElementById('btn-export').addEventListener('click', async () => {
     document.getElementById('menu-panel').classList.add('hidden');
     try {
-      const data = await DB.exportAll();
-      const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const fecha = new Date().toISOString().slice(0, 10);
-      a.href = url;
-      a.download = `cultivarnos-respaldo-${fecha}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      await exportarRespaldo();
       showToast('Respaldo exportado');
     } catch (err) {
       console.error(err);
@@ -97,9 +96,7 @@
       return;
     }
     try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      await DB.importAll(data, { replace: true });
+      await importarRespaldoDesdeArchivo(file);
       showToast('Datos importados');
       router();
     } catch (err) {

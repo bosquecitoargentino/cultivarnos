@@ -88,16 +88,68 @@ window.addEventListener('DOMContentLoaded', () => {
     navRegistrar.addEventListener('click', openRegistrarSheet);
   }
 
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('SW registration failed', err));
-
-    // Si se activa una versión nueva del Service Worker, recargamos una
-    // sola vez para que la app siempre corra el código más reciente.
-    let refrescando = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (refrescando) return;
-      refrescando = true;
-      window.location.reload();
-    });
-  }
+  inicializarServiceWorker();
 });
+
+// ---------------------------------------------------------------------
+// Service Worker: registro + aviso de actualización disponible.
+//
+// A propósito NO llamamos self.skipWaiting() automáticamente desde el SW
+// (ver sw.js): así, cuando hay una versión nueva, el Service Worker nuevo
+// queda "esperando" en vez de tomar control y recargar la página sin
+// avisar. Acá mostramos un banner discreto y recién activamos la versión
+// nueva cuando la persona toca "Actualizar ahora" — nunca de forma
+// automática ni silenciosa, y nunca más de una vez (evita loops).
+// ---------------------------------------------------------------------
+function inicializarServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+
+  let refrescando = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refrescando) return;
+    refrescando = true;
+    window.location.reload();
+  });
+
+  navigator.serviceWorker.register('./sw.js').then((registration) => {
+    // Caso 1: ya había una versión nueva instalada y esperando (ej. se
+    // instaló mientras la app estaba cerrada, y ahora se reabre).
+    if (registration.waiting && navigator.serviceWorker.controller) {
+      mostrarBannerActualizacion(registration);
+    }
+
+    // Caso 2: se detecta una actualización mientras la app está abierta.
+    registration.addEventListener('updatefound', () => {
+      const nuevoWorker = registration.installing;
+      if (!nuevoWorker) return;
+      nuevoWorker.addEventListener('statechange', () => {
+        // "installed" + ya había un controller = es una actualización real
+        // (no la primera instalación de la PWA, que no necesita aviso).
+        if (nuevoWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          mostrarBannerActualizacion(registration);
+        }
+      });
+    });
+  }).catch((err) => console.warn('SW registration failed', err));
+}
+
+function mostrarBannerActualizacion(registration) {
+  const banner = document.getElementById('update-banner');
+  if (!banner || banner.classList.contains('show')) return; // nunca más de un banner a la vez
+  banner.classList.remove('hidden');
+  requestAnimationFrame(() => banner.classList.add('show'));
+
+  const btnActualizar = document.getElementById('update-banner-btn');
+  const btnCerrar = document.getElementById('update-banner-cerrar');
+
+  function activarNuevaVersion() {
+    if (!registration.waiting) return;
+    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+  }
+
+  btnActualizar.addEventListener('click', activarNuevaVersion, { once: true });
+  btnCerrar.addEventListener('click', () => {
+    banner.classList.remove('show');
+    setTimeout(() => banner.classList.add('hidden'), 250);
+  }, { once: true });
+}
