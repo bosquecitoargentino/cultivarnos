@@ -2,7 +2,7 @@
 // Sin dependencias externas. Expone window.DB con métodos async.
 
 const DB_NAME = 'cultivarnos';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise = null;
 
@@ -34,6 +34,13 @@ function openDB() {
 
       if (!db.objectStoreNames.contains('fotos')) {
         db.createObjectStore('fotos', { keyPath: 'id', autoIncrement: true });
+      }
+
+      // Configuración general de la app (hemisferio, ubicación aproximada,
+      // y campos preparados para región/clima/suelo más adelante). Un
+      // único registro con id fijo 'general'.
+      if (!db.objectStoreNames.contains('configuracion')) {
+        db.createObjectStore('configuracion', { keyPath: 'id' });
       }
     };
 
@@ -128,6 +135,32 @@ const DB = {
       }));
   },
 
+  // ---------- CONFIGURACIÓN ----------
+  // Se lee siempre con valores por defecto para que el resto de la app no
+  // tenga que preocuparse por si el registro ya existe o no.
+  async getConfiguracion() {
+    const store = await tx('configuracion');
+    const existing = await reqToPromise(store.get('general'));
+    return {
+      id: 'general',
+      hemisferio: null,
+      lat: null,
+      lon: null,
+      region: null,
+      clima: null,
+      tipoSuelo: null,
+      ...existing,
+    };
+  },
+
+  async setConfiguracion(cambios) {
+    const actual = await this.getConfiguracion();
+    const store = await tx('configuracion', 'readwrite');
+    const actualizada = { ...actual, ...cambios, id: 'general' };
+    await reqToPromise(store.put(actualizada));
+    return actualizada;
+  },
+
   // ---------- RECORDATORIOS ----------
   async addRecordatorio(data) {
     const store = await tx('recordatorios', 'readwrite');
@@ -185,7 +218,7 @@ const DB = {
 
   // ---------- EXPORT / IMPORT ----------
   async exportAll() {
-    const [cultivos, eventos, recordatorios] = await Promise.all([
+    const [cultivos, eventos, recordatorios, configuracion] = await Promise.all([
       this.getAllCultivos(),
       (async () => {
         const store = await tx('eventos');
@@ -195,6 +228,7 @@ const DB = {
         const store = await tx('recordatorios');
         return reqToPromise(store.getAll());
       })(),
+      this.getConfiguracion(),
     ]);
 
     const fotosStore = await tx('fotos');
@@ -214,6 +248,7 @@ const DB = {
       eventos,
       recordatorios,
       fotos,
+      configuracion,
     };
   },
 
@@ -230,7 +265,7 @@ const DB = {
     );
 
     const db = await openDB();
-    const storeNames = ['cultivos', 'eventos', 'recordatorios', 'fotos'];
+    const storeNames = ['cultivos', 'eventos', 'recordatorios', 'fotos', 'configuracion'];
     const t = db.transaction(storeNames, 'readwrite');
 
     if (replace) {
@@ -248,6 +283,14 @@ const DB = {
 
     const recordatoriosStore = t.objectStore('recordatorios');
     (data.recordatorios || []).forEach((r) => recordatoriosStore.put(r));
+
+    // Respaldos anteriores a esta versión no tienen "configuracion" — no
+    // pasa nada, el registro queda vacío y getConfiguracion() sigue
+    // devolviendo los valores por defecto.
+    if (data.configuracion) {
+      const configStore = t.objectStore('configuracion');
+      configStore.put({ ...data.configuracion, id: 'general' });
+    }
 
     return new Promise((resolve, reject) => {
       t.oncomplete = () => resolve(true);

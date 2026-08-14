@@ -3,9 +3,10 @@
 // escribirla en un cuaderno.
 
 async function renderInicio(root) {
-  const [cultivos, recordatorios] = await Promise.all([
+  const [cultivos, recordatorios, config] = await Promise.all([
     DB.getAllCultivos(),
     DB.getRecordatoriosPendientes(),
+    DB.getConfiguracion(),
   ]);
 
   const activos = cultivos.filter((c) => c.estado === 'activo');
@@ -40,6 +41,8 @@ async function renderInicio(root) {
       </div>
       <div id="activos-list"></div>
     </section>
+
+    <section id="temporada-section"></section>
   `;
 
   // Recordatorios: sección completa solo si hay pendientes; si no, una
@@ -105,6 +108,46 @@ async function renderInicio(root) {
     activosList.querySelectorAll('.cultivo-card').forEach((card) => {
       card.addEventListener('click', () => navigate(`#/cultivo/${card.dataset.id}`));
     });
+  }
+
+  // Esta temporada: motor local, sin IA — solo lo que la biblioteca de
+  // especies puede resolver de forma predecible según hemisferio y mes.
+  const temporadaSection = root.querySelector('#temporada-section');
+  if (!config.hemisferio) {
+    temporadaSection.innerHTML = `
+      <div class="section-title">Esta temporada 🌱</div>
+      <div class="temporada-prompt">
+        <span>Configurá tu hemisferio para ver qué podés sembrar ahora.</span>
+        <a href="#/configuracion" class="link-small">Configurar</a>
+      </div>
+    `;
+  } else {
+    const mesActual = new Date().getMonth() + 1;
+    const recomendaciones = obtenerRecomendacionesTemporada(config.hemisferio, mesActual);
+    if (!recomendaciones.length) {
+      temporadaSection.innerHTML = `
+        <div class="section-title">Esta temporada 🌱</div>
+        <p class="fotos-vacio">Este mes no hay siembras típicas para arrancar.</p>
+        <a href="#/calendario" class="link-ver-todas">Ver calendario →</a>
+      `;
+    } else {
+      temporadaSection.innerHTML = `
+        <div class="section-title">Esta temporada 🌱</div>
+        <div class="temporada-list">
+          ${recomendaciones
+            .map(
+              (r) => `
+                <div class="temporada-item">
+                  <span class="temporada-especie">${escapeHtml(r.nombre)}</span>
+                  <span class="temporada-tipo">${r.tipo === 'almacigo' ? 'Almácigo' : 'Siembra directa'}</span>
+                </div>
+              `
+            )
+            .join('')}
+        </div>
+        <a href="#/calendario" class="link-ver-todas">Ver calendario →</a>
+      `;
+    }
   }
 
   root.querySelector('#btn-obs-principal').addEventListener('click', () => {

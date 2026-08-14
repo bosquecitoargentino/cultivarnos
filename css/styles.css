@@ -940,6 +940,92 @@ section + section { margin-top: 20px; }
 .lightbox-caption-nota { margin-top: 6px; font-size: 13px; color: rgba(255,255,255,0.9); line-height: 1.4; }
 .lightbox-counter { margin-top: 8px; font-size: 11px; color: rgba(255,255,255,0.55); text-align: center; }
 
+/* ---------- Esta temporada (Inicio) ---------- */
+.temporada-prompt {
+  font-size: 13px;
+  color: var(--texto-suave);
+  background: var(--crema-card);
+  border-radius: var(--radio-chico);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.temporada-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.temporada-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--crema-card);
+  border-radius: var(--radio-chico);
+  padding: 10px 14px;
+  box-shadow: var(--sombra);
+}
+.temporada-especie { font-weight: 700; font-size: 14px; }
+.temporada-tipo { font-size: 12px; color: var(--verde); font-weight: 600; }
+
+/* ---------- Configuración ---------- */
+.config-geo-estado {
+  font-size: 12px;
+  color: var(--texto-suave);
+  margin-top: 8px;
+}
+.config-nota {
+  font-size: 13px;
+  color: var(--texto-suave);
+  line-height: 1.4;
+}
+
+/* ---------- Calendario de temporada ---------- */
+.calendario-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--crema-card);
+  border-radius: var(--radio-chico);
+  padding: 6px 8px;
+  margin-bottom: 16px;
+  box-shadow: var(--sombra);
+}
+.calendario-nav-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: var(--verde-suave);
+  color: var(--verde-oscuro);
+  font-size: 20px;
+}
+.calendario-nav-btn:active { background: var(--verde-claro); }
+.calendario-mes {
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--verde-oscuro);
+}
+.calendario-grupo + .calendario-grupo { margin-top: 16px; }
+.calendario-grupo-titulo {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--verde-oscuro);
+  margin-bottom: 8px;
+}
+.calendario-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.calendario-chip {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--crema-card);
+  color: var(--texto);
+  box-shadow: var(--sombra);
+}
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed;

@@ -7,6 +7,8 @@ const ROUTES = {
   '#/inicio': { render: renderInicio, nav: 'inicio' },
   '#/cultivos': { render: renderCultivos, nav: 'cultivos' },
   '#/nuevo': { render: renderNuevo, nav: 'registrar' },
+  '#/configuracion': { render: renderConfiguracion, nav: null },
+  '#/calendario': { render: renderCalendario, nav: null },
   // '#/cultivo/:id' se maneja aparte
 };
 
