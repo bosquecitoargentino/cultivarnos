@@ -15,7 +15,11 @@ async function renderDetalle(id, root) {
     DB.getConfiguracion(),
   ]);
 
-  const fotoUrl = await fotoUrlCache.getUrl(cultivo.fotoId);
+  // Cabecera: foto real más reciente, o si todavía no hay ninguna, la
+  // imagen predeterminada de la especie (nunca al revés). La sección
+  // "Fotos" más abajo sigue usando `fotos` (DB.getFotosByCultivo) tal
+  // cual — esa lista es exclusivamente de fotografías reales.
+  const fotoUrl = await obtenerImagenCultivo(cultivo, eventos);
   const dias = diasDesde(cultivo.fechaInicio);
   const pendientes = recordatorios.filter((r) => r.estado === 'pendiente');
 

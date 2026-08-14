@@ -1376,6 +1376,18 @@ const ALIAS_ESPECIES_PREGUNTAS = {
   tithonia: ['tithonia'],
   leucaena: ['leucaena'],
   banano: ['banano', 'banana', 'platano'],
+
+  // Estas 5 especies están en cultivos-data.js (siembra/etapas/imagen)
+  // pero todavía no tienen preguntas específicas cargadas en este archivo
+  // — identificarEspecie() igual las resuelve para que la imagen
+  // predeterminada y la estimación de etapa (que sí usa cultivos-data.js)
+  // funcionen bien; obtenerPreguntasActuales cae a preguntas generales
+  // para ellas, tal como ya hacía antes de que existiera este alias.
+  zanahoria: ['zanahoria'],
+  remolacha: ['remolacha', 'betarraga', 'beterraga'],
+  poroto: ['poroto', 'frijol', 'judia', 'chaucha'],
+  puerro: ['puerro'],
+  cebolla: ['cebolla'],
 };
 
 // Encuentra el id interno de especie a partir de un nombre libre (el que

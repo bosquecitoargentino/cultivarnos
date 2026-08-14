@@ -200,7 +200,8 @@ async function openObservacionRapida(cultivos) {
 
   const itemsHtml = await Promise.all(
     activos.map(async (c) => {
-      const fotoUrl = await fotoUrlCache.getUrl(c.fotoId);
+      const eventosCultivo = await DB.getEventosByCultivo(c.id);
+      const fotoUrl = await obtenerImagenCultivo(c, eventosCultivo);
       return `
         <button type="button" class="cultivo-pick-item" data-id="${c.id}" data-especie="${escapeHtml(c.especie)}">
           <span class="cultivo-pick-thumb" style="${fotoUrl ? `background-image:url('${fotoUrl}')` : ''}">${fotoUrl ? '' : '🌿'}</span>

@@ -113,6 +113,37 @@ function objectUrlCache() {
 
 const fotoUrlCache = objectUrlCache();
 
+// ---------------------------------------------------------------------
+// Imagen representativa de un cultivo — única función reutilizable para
+// resolver qué imagen mostrar en tarjetas, cabecera y miniaturas. Orden
+// de prioridad, siempre el mismo, sin condiciones sueltas en las vistas:
+//
+//   1) la fotografía real más reciente (el primer evento con fotoId en
+//      `eventos`, que ya viene ordenado de más nuevo a más viejo por
+//      DB.getEventosByCultivo) — nunca se reemplaza una foto real
+//   2) si no hay ninguna foto propia, la imagen predeterminada de la
+//      especie (biblioteca CULTIVOS_DATA -> campo `imagen`), resuelta a
+//      partir de cultivo.especie con el mismo matcher que ya usa el
+//      motor de observación (identificarEspecie) — nada de esto se
+//      guarda en IndexedDB ni en el cultivo, se calcula al vuelo
+//   3) si la especie no es reconocida, null — la vista cae a su ícono
+//      de reemplazo actual (emoji), exactamente como hasta ahora
+//
+// Esta función NO decide qué mostrar en la sección "Fotos": esa sigue
+// viniendo pura de DB.getFotosByCultivo (fotos reales únicamente).
+async function obtenerImagenCultivo(cultivo, eventos) {
+  const eventoConFoto = (eventos || []).find((e) => e.fotoId);
+  if (eventoConFoto) {
+    const url = await fotoUrlCache.getUrl(eventoConFoto.fotoId);
+    if (url) return url;
+  }
+  if (typeof identificarEspecie !== 'function' || typeof obtenerCultivoDataPorId !== 'function') return null;
+  const especieId = identificarEspecie(cultivo.especie);
+  if (!especieId) return null;
+  const datos = obtenerCultivoDataPorId(especieId);
+  return (datos && datos.imagen) || null;
+}
+
 // Crea un modal tipo "hoja" con animación de entrada/salida.
 // Devuelve { backdrop, close } — usar close() en vez de backdrop.remove()
 // para que la animación de salida se vea antes de sacarlo del DOM.

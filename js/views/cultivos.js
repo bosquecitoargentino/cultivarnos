@@ -3,9 +3,9 @@
 // Tarjeta compacta y fotográfica — usada en Inicio y en Mis cultivos.
 // [FOTO] Especie / Variedad / Ubicación · Día N · Estado / Última observación
 async function renderCultivoCardHtml(cultivo) {
-  const fotoUrl = await fotoUrlCache.getUrl(cultivo.fotoId);
-  const dias = diasDesde(cultivo.fechaInicio);
   const eventos = await DB.getEventosByCultivo(cultivo.id);
+  const fotoUrl = await obtenerImagenCultivo(cultivo, eventos);
+  const dias = diasDesde(cultivo.fechaInicio);
   const finalizado = cultivo.estado === 'finalizado';
 
   const metaPartes = [];
