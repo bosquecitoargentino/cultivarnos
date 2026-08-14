@@ -9,6 +9,7 @@ const TIPO_INICIO_LABELS = {
 const EVENTO_TIPOS = [
   { value: 'siembra', label: 'Siembra', icon: '🌰' },
   { value: 'observacion', label: 'Observación', icon: '👁️' },
+  { value: 'revision', label: 'Revisión guiada', icon: '🔍' },
   { value: 'fotografia', label: 'Fotografía', icon: '📷' },
   { value: 'germinacion', label: 'Germinación', icon: '🌱' },
   { value: 'trasplante', label: 'Trasplante', icon: '🪴' },
@@ -26,6 +27,17 @@ function eventoLabel(tipo) {
 function eventoIcon(tipo) {
   const found = EVENTO_TIPOS.find((e) => e.value === tipo);
   return found ? found.icon : '📝';
+}
+
+// Normaliza texto libre para poder compararlo/buscarlo sin depender de
+// mayúsculas, tildes o espacios extra (ej. "Tomate  Cherry" -> "tomate cherry").
+function normalizarTexto(str) {
+  return (str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
 
 function formatFecha(isoOrDate) {

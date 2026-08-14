@@ -1,0 +1,14 @@
+# worker/wrangler.toml — configuración de deploy del proxy de IA en
+# Cloudflare Workers. Ver docs/deploy-ia.md para los pasos completos.
+#
+# La API key de Anthropic y el token de la app NO van acá — se cargan
+# como secretos con `wrangler secret put` después del primer deploy.
+
+name = "cultivarnos-ia"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+# Origen exacto de tu GitHub Pages (sin barra al final). El Worker solo
+# responde pedidos que digan venir de este origen.
+ALLOWED_ORIGIN = "https://bosquecitoargentino.github.io"

@@ -8,15 +8,22 @@ async function renderDetalle(id, root) {
     return;
   }
 
-  const [eventos, recordatorios, fotos] = await Promise.all([
+  const [eventos, recordatorios, fotos, config] = await Promise.all([
     DB.getEventosByCultivo(id),
     DB.getRecordatoriosByCultivo(id),
     DB.getFotosByCultivo(id),
+    DB.getConfiguracion(),
   ]);
 
   const fotoUrl = await fotoUrlCache.getUrl(cultivo.fotoId);
   const dias = diasDesde(cultivo.fechaInicio);
   const pendientes = recordatorios.filter((r) => r.estado === 'pendiente');
+
+  // Qué observar ahora: motor local, sin IA — no tiene sentido seguir
+  // sugiriendo observaciones sobre un cultivo ya finalizado.
+  const observar = cultivo.estado === 'finalizado'
+    ? { preguntas: [] }
+    : obtenerPreguntasActuales(cultivo, eventos, new Date(), config.hemisferio, 3);
 
   root.innerHTML = `
     <div class="detalle-hero">
@@ -41,6 +48,12 @@ async function renderDetalle(id, root) {
       <button id="btn-add-recordatorio">⏰ Recordatorio</button>
       <button id="btn-toggle-estado">${cultivo.estado === 'finalizado' ? '↩️ Reactivar' : '🏁 Finalizar'}</button>
     </div>
+
+    ${cultivo.estado !== 'finalizado' ? `
+    <section>
+      <div class="section-title">Qué observar ahora 🌱</div>
+      <div id="observar-ahora"></div>
+    </section>` : ''}
 
     ${pendientes.length ? `
     <section>
@@ -107,6 +120,48 @@ async function renderDetalle(id, root) {
         showToast('Pospuesto 3 días');
       }
       renderDetalle(id, root);
+    });
+  }
+
+  // Qué observar ahora: preguntas rápidas del motor de observación (sin IA,
+  // sin diagnóstico — solo guía sobre qué mirar). Cada respuesta se guarda
+  // al toque en el historial; si la pregunta trae una acción o recordatorio
+  // asociado, se ofrece — nunca se crea nada sin confirmación.
+  const observarWrap = root.querySelector('#observar-ahora');
+  if (observarWrap) {
+    observarWrap.innerHTML = renderObservarAhoraHtml(observar.preguntas);
+    observarWrap.addEventListener('click', async (e) => {
+      const opcionBtn = e.target.closest('.observar-opcion');
+      if (opcionBtn) {
+        const preguntaId = opcionBtn.dataset.preguntaId;
+        const respuesta = opcionBtn.dataset.respuesta;
+        const pregunta = observar.preguntas.find((p) => p.id === preguntaId);
+        if (!pregunta) return;
+        const item = opcionBtn.closest('.observar-item');
+        item.querySelectorAll('.observar-opcion').forEach((b) => {
+          b.classList.toggle('selected', b === opcionBtn);
+          b.disabled = true;
+        });
+        await guardarRespuestaRapida(id, pregunta, respuesta);
+        showToast('Observación guardada');
+        const oferta = construirOferta(pregunta, respuesta);
+        if (oferta) {
+          // Si hay una oferta (acción o recordatorio sugerido), esperamos su
+          // confirmación antes de refrescar la ficha, para que la persona
+          // pueda verla y decidir sin que la pantalla se mueva debajo suyo.
+          mostrarOfertaEnItem(item, oferta, id, () => renderDetalle(id, root));
+        } else {
+          item.classList.add('resuelto');
+          // Refresca la ficha para que la respuesta quede visible en el
+          // historial al toque, igual que el resto de las acciones rápidas
+          // de esta vista (completar recordatorio, eliminar evento, etc.).
+          setTimeout(() => renderDetalle(id, root), 260);
+        }
+        return;
+      }
+      if (e.target.closest('#btn-revision-completa')) {
+        abrirRevisionCompleta(id, cultivo, eventos, config, () => renderDetalle(id, root));
+      }
     });
   }
 
@@ -179,12 +234,247 @@ async function renderTimelineItem(ev, fotos) {
           <span>${eventoLabel(ev.tipo)}</span>
           <span class="timeline-fecha">${formatFecha(ev.fecha)}</span>
         </div>
+        ${ev.respuestas && ev.respuestas.length ? `
+        <div class="timeline-respuestas">
+          ${ev.respuestas.map((r) => `<div class="timeline-respuesta"><strong>${escapeHtml(r.etiqueta)}:</strong> ${escapeHtml(r.respuesta)}</div>`).join('')}
+        </div>` : ''}
         ${ev.nota ? `<div class="timeline-nota">${escapeHtml(ev.nota)}</div>` : ''}
         ${fotoUrl ? `<button type="button" class="timeline-foto" data-foto-index="${fotoIndex}" aria-label="Ver foto grande"><img src="${fotoUrl}" alt="Foto del evento" /></button>` : ''}
         <button class="timeline-delete" data-id="${ev.id}">Eliminar</button>
       </div>
     </div>
   `;
+}
+
+// ---------------------------------------------------------------------
+// Qué observar ahora / Revisión guiada — capa de presentación del motor
+// de observación (motor-observacion.js). Esta sección no contiene ninguna
+// lógica agronómica: solo pinta lo que el motor decide y guarda las
+// respuestas. Ninguna acción o recordatorio se crea sin confirmación
+// explícita del usuario (principio central: enseñar a observar, no
+// diagnosticar).
+// ---------------------------------------------------------------------
+
+function renderObservarAhoraHtml(preguntas) {
+  if (!preguntas.length) {
+    return `
+      <div class="observar-vacio">
+        <p>No hay preguntas sugeridas por ahora.</p>
+        <button type="button" id="btn-revision-completa" class="link-ver-todas">👁 Revisar cultivo</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="observar-lista">
+      ${preguntas.map((p) => `
+        <div class="observar-item" data-pregunta-id="${p.id}">
+          <div class="observar-pregunta">${escapeHtml(p.texto)}</div>
+          <div class="observar-opciones">
+            ${p.opciones.map((op) => `<button type="button" class="observar-opcion" data-pregunta-id="${p.id}" data-respuesta="${escapeHtml(op)}">${escapeHtml(op)}</button>`).join('')}
+          </div>
+          ${p.pista ? `<div class="observar-pista">${escapeHtml(p.pista)}</div>` : ''}
+        </div>
+      `).join('')}
+    </div>
+    <button type="button" id="btn-revision-completa" class="link-ver-todas">👁 Hacer revisión completa →</button>
+  `;
+}
+
+// Guarda una respuesta rápida agrupándola en el evento de revisión del día
+// (si ya existe uno para hoy) en vez de crear un evento por cada respuesta.
+async function guardarRespuestaRapida(cultivoId, pregunta, respuesta, fecha) {
+  const hoy = fecha || todayIsoDate();
+  const eventos = await DB.getEventosByCultivo(cultivoId);
+  const revisionHoy = eventos.find((e) => e.tipo === 'revision' && e.fecha === hoy);
+  const entrada = { preguntaId: pregunta.id, etiqueta: pregunta.etiqueta || pregunta.texto, respuesta };
+  if (revisionHoy) {
+    const respuestas = (revisionHoy.respuestas || []).filter((r) => r.preguntaId !== pregunta.id);
+    respuestas.push(entrada);
+    await DB.updateEvento(revisionHoy.id, { respuestas });
+  } else {
+    await DB.addEvento({ cultivoId, tipo: 'revision', fecha: hoy, respuestas: [entrada] });
+  }
+}
+
+// Si la respuesta dada coincide con la que dispara una acción o un
+// recordatorio sugerido para esa pregunta, arma el objeto de oferta.
+// Nunca se ejecuta nada acá — solo se describe qué se podría ofrecer.
+function construirOferta(pregunta, respuesta) {
+  if (pregunta.accion && pregunta.accion.respuesta === respuesta) {
+    return { tipo: 'accion', eventoTipo: pregunta.accion.eventoTipo, label: pregunta.accion.label };
+  }
+  if (pregunta.recordatorio && pregunta.recordatorio.respuesta === respuesta) {
+    return { tipo: 'recordatorio', dias: pregunta.recordatorio.dias, titulo: pregunta.recordatorio.titulo };
+  }
+  return null;
+}
+
+// Muestra la oferta (registrar evento / crear recordatorio) debajo de la
+// pregunta respondida, con confirmación explícita Sí/No. onDone se llama
+// tanto si se confirma como si se descarta, para refrescar la ficha recién
+// ahí (así la persona alcanza a ver y decidir la oferta antes de que la
+// pantalla se actualice).
+function mostrarOfertaEnItem(item, oferta, cultivoId, onDone) {
+  const div = document.createElement('div');
+  div.className = 'observar-oferta';
+  const label = oferta.tipo === 'accion' ? oferta.label : `Recordarme en ${oferta.dias} días: ${oferta.titulo}`;
+  div.innerHTML = `
+    <span>${escapeHtml(label)}</span>
+    <div class="observar-oferta-botones">
+      <button type="button" class="pill-btn oferta-confirmar">Sí</button>
+      <button type="button" class="pill-btn oferta-descartar">No</button>
+    </div>
+  `;
+  item.appendChild(div);
+  div.querySelector('.oferta-confirmar').addEventListener('click', async () => {
+    if (oferta.tipo === 'accion') {
+      await DB.addEvento({ cultivoId, tipo: oferta.eventoTipo, fecha: todayIsoDate() });
+      showToast('Evento registrado');
+    } else {
+      const fecha = new Date();
+      fecha.setDate(fecha.getDate() + oferta.dias);
+      await DB.addRecordatorio({ cultivoId, titulo: oferta.titulo, fecha: fecha.toISOString().slice(0, 10), estado: 'pendiente' });
+      showToast('Recordatorio creado');
+    }
+    div.remove();
+    item.classList.add('resuelto');
+    if (onDone) setTimeout(onDone, 500);
+  });
+  div.querySelector('.oferta-descartar').addEventListener('click', () => {
+    div.remove();
+    item.classList.add('resuelto');
+    if (onDone) setTimeout(onDone, 260);
+  });
+}
+
+// Sesión guiada paso a paso ("1 de N"): recorre un pool más amplio de
+// preguntas, permite Omitir en cada paso, y al final agrupa todas las
+// respuestas de la sesión en UN solo evento de revisión (mismo criterio
+// de agrupamiento por día que las respuestas rápidas de la ficha).
+function abrirRevisionCompleta(cultivoId, cultivo, eventos, config, onSaved) {
+  const { preguntas } = obtenerPreguntasActuales(cultivo, eventos, new Date(), config.hemisferio, 8);
+  if (!preguntas.length) {
+    showToast('No hay más preguntas sugeridas por ahora');
+    return;
+  }
+
+  let idx = 0;
+  const respuestas = [];
+  const ofertas = [];
+
+  const { backdrop, close } = createModal(`
+    <div class="modal-sheet">
+      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div id="revision-contenido"></div>
+    </div>
+  `, 'revision-modal');
+
+  backdrop.querySelector('#modal-close').addEventListener('click', close);
+  const contenido = backdrop.querySelector('#revision-contenido');
+
+  function pintarPregunta() {
+    const p = preguntas[idx];
+    contenido.innerHTML = `
+      <div class="revision-progreso">${idx + 1} de ${preguntas.length}</div>
+      <div class="revision-pregunta">${escapeHtml(p.texto)}</div>
+      <div class="observar-opciones revision-opciones">
+        ${p.opciones.map((op) => `<button type="button" class="observar-opcion" data-respuesta="${escapeHtml(op)}">${escapeHtml(op)}</button>`).join('')}
+      </div>
+      ${p.pista ? `<div class="observar-pista">${escapeHtml(p.pista)}</div>` : ''}
+      <button type="button" id="revision-omitir" class="link-ver-todas">Omitir</button>
+    `;
+    contenido.querySelectorAll('.observar-opcion').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const respuesta = btn.dataset.respuesta;
+        respuestas.push({ preguntaId: p.id, etiqueta: p.etiqueta || p.texto, respuesta });
+        const oferta = construirOferta(p, respuesta);
+        if (oferta) ofertas.push({ ...oferta, preguntaTexto: p.texto });
+        avanzar();
+      });
+    });
+    contenido.querySelector('#revision-omitir').addEventListener('click', avanzar);
+  }
+
+  function avanzar() {
+    idx++;
+    if (idx < preguntas.length) pintarPregunta();
+    else pintarResumen();
+  }
+
+  function pintarResumen() {
+    contenido.innerHTML = `
+      <div class="revision-resumen-titulo">Revisión completada 🌱</div>
+      ${respuestas.length ? `
+        <div class="revision-resumen-lista">
+          ${respuestas.map((r) => `<div class="revision-resumen-item"><strong>${escapeHtml(r.etiqueta)}:</strong> ${escapeHtml(r.respuesta)}</div>`).join('')}
+        </div>
+      ` : `<p class="revision-resumen-vacio">No se registraron respuestas.</p>`}
+      ${ofertas.length ? `
+        <div class="revision-ofertas" id="revision-ofertas">
+          ${ofertas.map((o, i) => `
+            <div class="observar-oferta" data-oferta-index="${i}">
+              <span>${o.tipo === 'accion' ? escapeHtml(o.label) : `Recordarme en ${o.dias} días: ${escapeHtml(o.titulo)}`}</span>
+              <div class="observar-oferta-botones">
+                <button type="button" class="pill-btn oferta-confirmar" data-oferta-index="${i}">Sí</button>
+                <button type="button" class="pill-btn oferta-descartar" data-oferta-index="${i}">No</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      <div class="form-group">
+        <label class="form-label">Nota <span class="optional">(opcional)</span></label>
+        <textarea id="revision-nota" class="form-textarea" placeholder="Algo más que quieras anotar..."></textarea>
+      </div>
+      <button type="button" id="revision-guardar" class="btn-primary">Guardar revisión</button>
+    `;
+
+    const ofertasWrap = contenido.querySelector('#revision-ofertas');
+    if (ofertasWrap) {
+      ofertasWrap.addEventListener('click', async (e) => {
+        const confirmar = e.target.closest('.oferta-confirmar');
+        const descartar = e.target.closest('.oferta-descartar');
+        const btn = confirmar || descartar;
+        if (!btn) return;
+        const i = Number(btn.dataset.ofertaIndex);
+        const oferta = ofertas[i];
+        if (confirmar) {
+          if (oferta.tipo === 'accion') {
+            await DB.addEvento({ cultivoId, tipo: oferta.eventoTipo, fecha: todayIsoDate() });
+            showToast('Evento registrado');
+          } else {
+            const fecha = new Date();
+            fecha.setDate(fecha.getDate() + oferta.dias);
+            await DB.addRecordatorio({ cultivoId, titulo: oferta.titulo, fecha: fecha.toISOString().slice(0, 10), estado: 'pendiente' });
+            showToast('Recordatorio creado');
+          }
+        }
+        btn.closest('.observar-oferta').remove();
+      });
+    }
+
+    contenido.querySelector('#revision-guardar').addEventListener('click', async () => {
+      const nota = contenido.querySelector('#revision-nota').value.trim();
+      const hoy = todayIsoDate();
+      const eventosCultivo = await DB.getEventosByCultivo(cultivoId);
+      const revisionHoy = eventosCultivo.find((e) => e.tipo === 'revision' && e.fecha === hoy);
+      if (revisionHoy) {
+        const previas = (revisionHoy.respuestas || []).filter((r) => !respuestas.some((n) => n.preguntaId === r.preguntaId));
+        const merged = [...previas, ...respuestas];
+        await DB.updateEvento(revisionHoy.id, {
+          respuestas: merged,
+          nota: nota ? (revisionHoy.nota ? `${revisionHoy.nota}\n${nota}` : nota) : revisionHoy.nota,
+        });
+      } else {
+        await DB.addEvento({ cultivoId, tipo: 'revision', fecha: hoy, respuestas, nota: nota || null });
+      }
+      close();
+      showToast('Revisión guardada');
+      onSaved();
+    });
+  }
+
+  pintarPregunta();
 }
 
 // Vista completa: todas las fotos del cultivo en una cuadrícula.

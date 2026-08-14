@@ -3,7 +3,7 @@
 // (así las actualizaciones se ven al toque sin depender de que el usuario
 // borre el caché a mano), con reserva completa para uso 100% offline.
 
-const CACHE_NAME = 'cultivarnos-v3';
+const CACHE_NAME = 'cultivarnos-v5';
 const APP_SHELL = [
   './',
   './index.html',
@@ -14,6 +14,8 @@ const APP_SHELL = [
   './js/utils.js',
   './js/data/cultivos-data.js',
   './js/motor-estacional.js',
+  './js/data/preguntas-cultivos.js',
+  './js/motor-observacion.js',
   './js/views/inicio.js',
   './js/views/cultivos.js',
   './js/views/nuevo.js',

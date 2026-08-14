@@ -2,7 +2,7 @@
 // Sin dependencias externas. Expone window.DB con métodos async.
 
 const DB_NAME = 'cultivarnos';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise = null;
 
@@ -41,6 +41,16 @@ function openDB() {
       // único registro con id fijo 'general'.
       if (!db.objectStoreNames.contains('configuracion')) {
         db.createObjectStore('configuracion', { keyPath: 'id' });
+      }
+
+      // Store creado para una función de IA que se canceló y no llegó a
+      // usarse (ningún dispositivo tiene datos acá). Se deja declarado tal
+      // cual, sin usarlo, en vez de borrarlo: si algún dispositivo ya pasó
+      // por esta versión de la base, borrar el store implicaría una
+      // migración destructiva innecesaria. No tiene ningún costo dejarlo
+      // inerte.
+      if (!db.objectStoreNames.contains('conversaciones')) {
+        db.createObjectStore('conversaciones', { keyPath: 'id' });
       }
     };
 
@@ -109,6 +119,15 @@ const DB = {
     const index = store.index('cultivoId');
     const result = await reqToPromise(index.getAll(IDBKeyRange.only(cultivoId)));
     return result.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  },
+
+  async updateEvento(id, changes) {
+    const store = await tx('eventos', 'readwrite');
+    const existing = await reqToPromise(store.get(id));
+    if (!existing) throw new Error('Evento no encontrado');
+    const updated = { ...existing, ...changes };
+    await reqToPromise(store.put(updated));
+    return updated;
   },
 
   async deleteEvento(id) {
@@ -218,7 +237,7 @@ const DB = {
 
   // ---------- EXPORT / IMPORT ----------
   async exportAll() {
-    const [cultivos, eventos, recordatorios, configuracion] = await Promise.all([
+    const [cultivos, eventos, recordatorios, configuracion, conversaciones] = await Promise.all([
       this.getAllCultivos(),
       (async () => {
         const store = await tx('eventos');
@@ -229,6 +248,10 @@ const DB = {
         return reqToPromise(store.getAll());
       })(),
       this.getConfiguracion(),
+      (async () => {
+        const store = await tx('conversaciones');
+        return reqToPromise(store.getAll());
+      })(),
     ]);
 
     const fotosStore = await tx('fotos');
@@ -249,6 +272,7 @@ const DB = {
       recordatorios,
       fotos,
       configuracion,
+      conversaciones,
     };
   },
 
@@ -265,7 +289,7 @@ const DB = {
     );
 
     const db = await openDB();
-    const storeNames = ['cultivos', 'eventos', 'recordatorios', 'fotos', 'configuracion'];
+    const storeNames = ['cultivos', 'eventos', 'recordatorios', 'fotos', 'configuracion', 'conversaciones'];
     const t = db.transaction(storeNames, 'readwrite');
 
     if (replace) {
@@ -291,6 +315,9 @@ const DB = {
       const configStore = t.objectStore('configuracion');
       configStore.put({ ...data.configuracion, id: 'general' });
     }
+
+    const conversacionesStore = t.objectStore('conversaciones');
+    (data.conversaciones || []).forEach((c) => conversacionesStore.put(c));
 
     return new Promise((resolve, reject) => {
       t.oncomplete = () => resolve(true);
