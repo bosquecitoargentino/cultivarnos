@@ -189,6 +189,52 @@ function renderNuevo(root) {
     }
 
     showToast('Cultivo registrado 🌱');
+
+    // Si la especie es reconocida y arrancó de semilla, ofrecemos un primer
+    // seguimiento (ej. "Revisar germinación"). Nunca se crea sin
+    // confirmación — si no hay sugerencia o la persona ya cargó su propio
+    // recordatorio arriba, vamos directo a la ficha sin interrumpir nada.
+    const especieId = identificarEspecie(especie);
+    const sugerencia = sugerenciaSeguimientoInicial(especieId, tipoInicioSeleccionado);
+    if (sugerencia && !recCheck.checked) {
+      mostrarSeguimientoSugerido(root, cultivoId, especie, sugerencia);
+    } else {
+      navigate(`#/cultivo/${cultivoId}`);
+    }
+  });
+}
+
+// Pantalla breve de confirmación tras guardar el cultivo, con el
+// seguimiento inicial sugerido (motor-observacion.js decide el qué y el
+// cuándo; acá solo se muestra y se pide confirmación explícita).
+function mostrarSeguimientoSugerido(root, cultivoId, especie, sugerencia) {
+  root.innerHTML = `
+    <div class="creado-confirmacion">
+      <div class="creado-icono">🌱</div>
+      <div class="creado-titulo">${escapeHtml(especie)} registrado</div>
+      <div class="observar-oferta creado-oferta">
+        <span>Seguimiento sugerido: ${escapeHtml(sugerencia.titulo)} · dentro de ${sugerencia.dias} días</span>
+        <div class="observar-oferta-botones">
+          <button type="button" id="seguimiento-si" class="pill-btn">Crear recordatorio</button>
+          <button type="button" id="seguimiento-no" class="pill-btn">Ahora no</button>
+        </div>
+      </div>
+      <button type="button" id="ir-a-cultivo" class="btn-primary">Ver cultivo →</button>
+    </div>
+  `;
+
+  root.querySelector('#seguimiento-si').addEventListener('click', async () => {
+    const fecha = new Date();
+    fecha.setDate(fecha.getDate() + sugerencia.dias);
+    await DB.addRecordatorio({
+      cultivoId,
+      titulo: sugerencia.titulo,
+      fecha: fecha.toISOString().slice(0, 10),
+      estado: 'pendiente',
+    });
+    showToast('Recordatorio creado');
     navigate(`#/cultivo/${cultivoId}`);
   });
+  root.querySelector('#seguimiento-no').addEventListener('click', () => navigate(`#/cultivo/${cultivoId}`));
+  root.querySelector('#ir-a-cultivo').addEventListener('click', () => navigate(`#/cultivo/${cultivoId}`));
 }

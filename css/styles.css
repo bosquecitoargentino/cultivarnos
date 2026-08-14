@@ -1178,3 +1178,59 @@ button.link-ver-todas:active { transform: scale(0.98); }
 }
 .timeline-respuesta { font-size: 12px; color: var(--texto); }
 .timeline-respuesta strong { color: var(--verde-oscuro); }
+
+/* ---------- Qué observar hoy (Inicio) ---------- */
+.observar-hoy-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--crema-card);
+  border-radius: var(--radio-chico);
+  padding: 12px 14px;
+  box-shadow: var(--sombra);
+  animation: fadeInUp var(--dur) var(--ease) backwards;
+}
+.observar-hoy-item + .observar-hoy-item { margin-top: 8px; }
+.observar-hoy-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.observar-hoy-especie { font-weight: 700; font-size: 14px; color: var(--verde-oscuro); }
+.observar-hoy-sub { font-size: 12px; color: var(--texto-suave); }
+
+/* ---------- Seguimiento sugerido tras crear un cultivo ---------- */
+.creado-confirmacion {
+  text-align: center;
+  padding: 32px 6px 12px;
+  animation: fadeInUp var(--dur) var(--ease) backwards;
+}
+.creado-icono { font-size: 44px; margin-bottom: 10px; }
+.creado-titulo {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--verde-oscuro);
+  margin-bottom: 20px;
+}
+.creado-oferta {
+  text-align: left;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.creado-oferta .observar-oferta-botones { justify-content: flex-end; }
+
+/* ---------- Sugerencia de recordatorio dentro del modal de evento ---------- */
+.sugerencia-evento {
+  text-align: center;
+  padding: 10px 4px 4px;
+}
+.sugerencia-evento-icono { font-size: 38px; margin-bottom: 10px; }
+.sugerencia-evento-texto {
+  font-size: 14px;
+  color: var(--texto);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+.sugerencia-evento-botones {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

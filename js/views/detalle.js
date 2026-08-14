@@ -619,9 +619,51 @@ function openEventoModal(cultivoId, onSaved) {
       fotoId,
     });
 
-    close();
-    showToast('Evento agregado');
-    onSaved();
+    // Algunos tipos de evento (trasplante, poda...) tienen un seguimiento
+    // típico que vale la pena ofrecer — nunca se crea el recordatorio sin
+    // que la persona lo confirme acá mismo.
+    const sugerencia = sugerenciaRecordatorioPorEvento(tipoSeleccionado);
+    if (sugerencia) {
+      mostrarSugerenciaRecordatorioEnModal(backdrop, sugerencia, cultivoId, () => {
+        close();
+        onSaved();
+      });
+    } else {
+      close();
+      showToast('Evento agregado');
+      onSaved();
+    }
+  });
+}
+
+// Reemplaza el contenido del modal de evento por una oferta de
+// recordatorio de seguimiento, con confirmación explícita Sí/No.
+function mostrarSugerenciaRecordatorioEnModal(backdrop, sugerencia, cultivoId, onDone) {
+  const sheet = backdrop.querySelector('.modal-sheet');
+  sheet.innerHTML = `
+    <div class="modal-close-row"><button id="modal-close">✕</button></div>
+    <div class="sugerencia-evento">
+      <div class="sugerencia-evento-icono">🌱</div>
+      <div class="sugerencia-evento-texto">Evento registrado. ¿Querés que te recuerde<br /><strong>"${escapeHtml(sugerencia.titulo)}"</strong><br />en ${sugerencia.dias} días?</div>
+      <div class="sugerencia-evento-botones">
+        <button type="button" id="sugerencia-si" class="btn-primary">Sí, recordarme</button>
+        <button type="button" id="sugerencia-no" class="btn-secondary">No, gracias</button>
+      </div>
+    </div>
+  `;
+  sheet.querySelector('#modal-close').addEventListener('click', onDone);
+  sheet.querySelector('#sugerencia-no').addEventListener('click', onDone);
+  sheet.querySelector('#sugerencia-si').addEventListener('click', async () => {
+    const fecha = new Date();
+    fecha.setDate(fecha.getDate() + sugerencia.dias);
+    await DB.addRecordatorio({
+      cultivoId,
+      titulo: sugerencia.titulo,
+      fecha: fecha.toISOString().slice(0, 10),
+      estado: 'pendiente',
+    });
+    showToast('Recordatorio creado');
+    onDone();
   });
 }
 

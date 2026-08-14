@@ -11,6 +11,7 @@ async function renderInicio(root) {
 
   const activos = cultivos.filter((c) => c.estado === 'activo');
   const paraHoy = recordatorios.filter((r) => esParaHoy(r.fecha));
+  const observarHoy = await construirQueObservarHoy(activos);
 
   let resumen;
   if (!cultivos.length) {
@@ -33,6 +34,12 @@ async function renderInicio(root) {
     </section>
 
     <section id="recordatorios-section"></section>
+
+    ${observarHoy.length ? `
+    <section>
+      <div class="section-title">Qué observar hoy 👀</div>
+      <div id="observar-hoy-list"></div>
+    </section>` : ''}
 
     <section>
       <div class="section-title">
@@ -95,6 +102,30 @@ async function renderInicio(root) {
         showToast('Recordatorio pospuesto 3 días');
         renderInicio(root);
       }
+    });
+  }
+
+  // Qué observar hoy: señal blanda basada en "hace cuánto no se registra
+  // nada" — no reemplaza los recordatorios explícitos, es un empujoncito
+  // chico y priorizado (nunca una lista larga de tareas).
+  if (observarHoy.length) {
+    const obsHoyList = root.querySelector('#observar-hoy-list');
+    obsHoyList.innerHTML = observarHoy
+      .map(
+        (it) => `
+        <div class="observar-hoy-item">
+          <div class="observar-hoy-info">
+            <span class="observar-hoy-especie">${escapeHtml(it.cultivo.especie)}</span>
+            <span class="observar-hoy-sub">👀 Hace ${it.dias} días que no lo revisás</span>
+          </div>
+          <button type="button" class="pill-btn" data-id="${it.cultivo.id}">Revisar ahora</button>
+        </div>`
+      )
+      .join('');
+    obsHoyList.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-id]');
+      if (!btn) return;
+      navigate(`#/cultivo/${btn.dataset.id}`);
     });
   }
 
@@ -288,4 +319,24 @@ function renderObservacionPaso2(backdrop, close, cultivoId, especieLabel) {
     showToast('Observación registrada 🌿');
     router();
   });
+}
+
+// ---------------------------------------------------------------------
+// Qué observar hoy: prioriza cultivos activos con más días sin ningún
+// registro (evento distinto de la siembra inicial). Es una señal simple
+// a propósito — no reemplaza al motor de observación de la ficha, solo
+// ayuda a decidir POR CUÁL cultivo empezar. Lista corta siempre.
+// ---------------------------------------------------------------------
+
+async function construirQueObservarHoy(activos, limite = 3, umbralDias = 5) {
+  const candidatos = [];
+  for (const c of activos) {
+    const eventos = await DB.getEventosByCultivo(c.id);
+    const relevantes = eventos.filter((e) => e.tipo !== 'siembra');
+    const fechaReferencia = relevantes.length ? relevantes[0].fecha : c.fechaInicio;
+    const dias = diasDesde(fechaReferencia);
+    if (dias >= umbralDias) candidatos.push({ cultivo: c, dias });
+  }
+  candidatos.sort((a, b) => b.dias - a.dias);
+  return candidatos.slice(0, limite);
 }

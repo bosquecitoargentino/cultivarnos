@@ -99,3 +99,33 @@ function obtenerPreguntasActuales(cultivo, eventos, fechaActual, hemisferio, lim
 
   return { etapa, especieId, preguntas: candidatas.slice(0, limite) };
 }
+
+// ---------------------------------------------------------------------
+// Recordatorios sugeridos (siempre con confirmación explícita — este
+// motor solo describe la sugerencia, nunca crea nada por su cuenta).
+// ---------------------------------------------------------------------
+
+// Después de ciertos eventos manuales tiene sentido ofrecer un
+// recordatorio de seguimiento puntual. Lista chica a propósito: se puede
+// ampliar más adelante sin romper nada de lo que ya la usa.
+const SUGERENCIAS_RECORDATORIO_EVENTO = {
+  trasplante: { dias: 3, titulo: 'Revisar recuperación del trasplante' },
+  poda: { dias: 7, titulo: 'Observar rebrote después de la poda' },
+};
+
+function sugerenciaRecordatorioPorEvento(tipoEvento) {
+  return SUGERENCIAS_RECORDATORIO_EVENTO[tipoEvento] || null;
+}
+
+// Al crear un cultivo desde semilla, si la especie es reconocida y tiene
+// datos de germinación, se puede ofrecer un primer seguimiento. El día
+// elegido no es ni el mínimo ni el máximo de la ventana: un par de días
+// después del mínimo, para dar margen sin dejar pasar la ventana entera.
+function sugerenciaSeguimientoInicial(especieId, tipoInicio) {
+  if (tipoInicio !== 'semilla' || !especieId) return null;
+  const datos = obtenerCultivoDataPorId(especieId);
+  const rango = datos && datos.etapas && datos.etapas.germinacionDias;
+  if (!rango) return null;
+  const dias = Math.min(rango[0] + 2, rango[1]);
+  return { dias, titulo: 'Revisar germinación' };
+}
