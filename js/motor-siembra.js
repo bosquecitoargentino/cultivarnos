@@ -46,8 +46,39 @@ function obtenerMetodoSiembra(cultivo) {
   return null;
 }
 
+// Etiqueta del "bucket" de origen (lo que todavía no se movió a un destino
+// final), según el método. 'directa' y 'trasplante' no tienen uno: en
+// siembra directa lo germinado ya está en su lugar final, y en un cultivo
+// que arrancó como "Trasplante" las unidades iniciales YA se consideran en
+// destino desde el día 0 (ver calcularResumenSiembra). null = no aplica,
+// la vista no debe mostrar ningún bucket de origen.
+function etiquetaOrigen(metodo) {
+  if (metodo === 'semillero') return 'Semillero';
+  if (metodo === 'plantin') return 'Sin trasplantar';
+  return null;
+}
+
+// Etiqueta de la cantidad inicial, adaptada al método (punto 6 del pedido:
+// "evitar que todo diga siempre Sembradas").
+function etiquetaCantidadInicial(metodo) {
+  if (metodo === 'plantin') return 'plantines iniciales';
+  if (metodo === 'trasplante') return 'plantas trasplantadas';
+  return 'sembradas';
+}
+
 function calcularResumenSiembra(cultivo, eventos) {
-  const lista = eventos || [];
+  // DB.getEventosByCultivo devuelve más nuevo primero; acá necesitamos
+  // orden cronológico (más viejo -> más nuevo) para que la Distribución
+  // actual liste los destinos en el orden en que realmente ocurrieron los
+  // trasplantes, no en el orden (arbitrario para esto) en que llegó la
+  // lista. Mismo desempate que el resto de la app — ver utils.js.
+  const lista = [...(eventos || [])].sort((a, b) => {
+    const porFecha = parseLocalDate(a.fecha) - parseLocalDate(b.fecha);
+    if (porFecha !== 0) return porFecha;
+    const porCreacion = new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+    if (porCreacion !== 0) return porCreacion;
+    return (a.id || 0) - (b.id || 0);
+  });
   const eventoSiembra = lista.find((e) => e.tipo === 'siembra' && e.cantidad != null);
   if (!eventoSiembra) {
     return { activo: false };
@@ -63,8 +94,16 @@ function calcularResumenSiembra(cultivo, eventos) {
     ? sembradas
     : lista.filter((e) => e.tipo === 'germinacion' && e.cantidad != null).reduce((s, e) => s + e.cantidad, 0);
 
+  // Un cultivo que arrancó como "Trasplante" ya tiene sus unidades iniciales
+  // en destino desde el momento de la carga (nunca "esperando trasplante") —
+  // se tratan como si hubiera existido un trasplante inicial al destino
+  // guardado en el propio evento de siembra (ver nuevo.js / abrirModalAgregarSiembra,
+  // que reutilizan el campo "Ubicación" del cultivo para esto, sin agregar un
+  // campo nuevo al formulario).
+  const yaEnDestinoDesdeInicio = metodo === 'trasplante';
+
   const eventosTrasplante = lista.filter((e) => e.tipo === 'trasplante' && e.cantidad != null);
-  const trasplantadas = eventosTrasplante.reduce((s, e) => s + e.cantidad, 0);
+  const trasplantadas = (yaEnDestinoDesdeInicio ? sembradas : 0) + eventosTrasplante.reduce((s, e) => s + e.cantidad, 0);
 
   const eventosBaja = lista.filter((e) => e.tipo === 'baja' && e.cantidad != null);
   const bajasOrigen = eventosBaja.filter((e) => e.origen !== 'destino').reduce((s, e) => s + e.cantidad, 0);
@@ -75,20 +114,50 @@ function calcularResumenSiembra(cultivo, eventos) {
   const enDestino = Math.max(0, trasplantadas - bajasDestino);
   const pctGerminacion = !sinGerminacion && sembradas > 0 ? Math.round((germinadas / sembradas) * 100) : null;
 
+  // Distribución por destino: cantidad trasplantada a cada uno (incluyendo,
+  // para tipo "trasplante", el destino inicial), neta de las bajas
+  // registradas específicamente en ESE destino (punto 5 del pedido) — así
+  // "Bancal 2: 10" pasa a "Bancal 2: 8" cuando se registran 2 bajas ahí,
+  // sin perder la trazabilidad de a dónde fueron esas 2 bajas.
   const destinosMap = new Map();
+  if (yaEnDestinoDesdeInicio) {
+    const destinoInicial = eventoSiembra.destino || 'Sin destino especificado';
+    destinosMap.set(destinoInicial, sembradas);
+  }
   eventosTrasplante.forEach((e) => {
     const key = e.destino || 'Sin destino especificado';
     destinosMap.set(key, (destinosMap.get(key) || 0) + e.cantidad);
   });
+  eventosBaja
+    .filter((e) => e.origen === 'destino' && e.destino && destinosMap.has(e.destino))
+    .forEach((e) => {
+      destinosMap.set(e.destino, Math.max(0, destinosMap.get(e.destino) - e.cantidad));
+    });
 
   const muestraSemillero = metodo === 'semillero';
   const todoTrasplantado = muestraSemillero && germinadas > 0 && enOrigen === 0 && trasplantadas > 0;
+
+  // La siembra directa ya está en su lugar final desde que germina — no
+  // tiene sentido ofrecer "trasplante" como próxima acción (punto 6: "NO
+  // ofrecer trasplante como acción inmediata incoherente"). El resto de los
+  // métodos usan enOrigen (0 para "trasplante" por construcción, ver arriba).
+  const permiteTrasplante = metodo !== 'directa';
+
+  const origenLabel = etiquetaOrigen(metodo);
+  const distribucion = [];
+  if (origenLabel && enOrigen > 0) distribucion.push({ ubicacion: origenLabel, cantidad: enOrigen, tipo: 'origen' });
+  Array.from(destinosMap.entries()).forEach(([destino, cantidad]) => {
+    if (cantidad > 0) distribucion.push({ ubicacion: destino, cantidad, tipo: 'destino' });
+  });
 
   return {
     activo: true,
     metodo,
     sinGerminacion,
     muestraSemillero,
+    permiteTrasplante,
+    origenLabel,
+    etiquetaCantidadInicial: etiquetaCantidadInicial(metodo),
     sembradas,
     germinadas,
     trasplantadas,
@@ -99,6 +168,7 @@ function calcularResumenSiembra(cultivo, eventos) {
     enDestino,
     pctGerminacion,
     destinos: Array.from(destinosMap.entries()).map(([destino, cantidad]) => ({ destino, cantidad })),
+    distribucion,
     todoTrasplantado,
   };
 }
@@ -146,8 +216,24 @@ function validarCantidadTrasplante(resumen, cantidad) {
   return { ok: true };
 }
 
-function validarCantidadBaja(resumen, cantidad, origen) {
+// `destino` es opcional: cuando la baja ocurre en el lugar definitivo y el
+// lote tiene más de un destino, hay que saber en CUÁL — la disponibilidad
+// se valida contra ese destino puntual (resumen.destinos), no contra el
+// total agregado, para no permitir de más en un destino puntual aunque
+// sobre stock en otro (punto 5 del pedido).
+function validarCantidadBaja(resumen, cantidad, origen, destino) {
   if (!Number.isFinite(cantidad) || cantidad <= 0) return { ok: false, mensaje: 'Ingresá una cantidad mayor a 0.' };
+  if (origen === 'destino' && destino) {
+    const entrada = (resumen.destinos || []).find((d) => d.destino === destino);
+    const disponible = entrada ? entrada.cantidad : 0;
+    if (cantidad > disponible) {
+      return {
+        ok: false,
+        mensaje: disponible > 0 ? `En ${destino} quedan ${disponible} disponibles.` : `No hay plantas disponibles en ${destino}.`,
+      };
+    }
+    return { ok: true };
+  }
   const disponible = origen === 'destino' ? resumen.enDestino : resumen.enOrigen;
   if (cantidad > disponible) {
     return {
@@ -172,7 +258,9 @@ function calcularAnotacionesHistorialSiembra(eventos) {
   // función sea correcta incluso si varios eventos comparten fecha (sin
   // hora) por haberse cargado el mismo día.
   const cronologico = [...(eventos || [])].sort((a, b) => {
-    const porFecha = new Date(a.fecha) - new Date(b.fecha);
+    // fecha es 'YYYY-MM-DD': parseLocalDate (utils.js) evita el corrimiento
+    // de día de `new Date(fecha)` en husos negativos como Argentina.
+    const porFecha = parseLocalDate(a.fecha) - parseLocalDate(b.fecha);
     if (porFecha !== 0) return porFecha;
     const porCreacion = new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
     if (porCreacion !== 0) return porCreacion;
@@ -210,6 +298,7 @@ function calcularAnotacionesHistorialSiembra(eventos) {
         tipo: 'baja',
         cantidad: e.cantidad,
         origen: e.origen === 'destino' ? 'destino' : 'origen',
+        destino: e.origen === 'destino' ? (e.destino || null) : null,
         motivo: e.motivo || null,
         enOrigen: Math.max(0, germinadasAcum - trasplantadasAcum - bajasOrigenAcum),
       });

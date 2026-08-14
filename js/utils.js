@@ -41,20 +41,88 @@ function normalizarTexto(str) {
     .trim();
 }
 
+// ---------------------------------------------------------------------
+// Fechas: distinción central entre "fecha calendario" y "timestamp".
+//
+//   - fecha calendario: string 'YYYY-MM-DD', SIN hora. Así se guardan
+//     cultivo.fechaInicio, evento.fecha y recordatorio.fecha — representan
+//     un DÍA, no un instante.
+//   - timestamp: string ISO completo con hora (createdAt, updatedAt,
+//     config.ultimoRespaldo) — representa un instante real, no un día de
+//     calendario.
+//
+// El bug a evitar: `new Date("2026-08-14")` interpreta ese string como
+// medianoche UTC (spec ISO 8601). En un huso horario negativo como
+// America/Argentina/Buenos_Aires (UTC-3), medianoche UTC del 14 es las
+// 21:00 del día 13 en hora local — así que `.getDate()`,
+// `.toLocaleDateString()` o cualquier lectura en hora local de ese Date
+// devuelven el 13, no el 14. Lo mismo al revés: `date.toISOString().slice(0,10)`
+// sobre un Date armado en hora local corre el día hacia adelante si son
+// las 21:00-23:59 locales (porque cruza la medianoche UTC).
+//
+// parseLocalDate/formatIsoDateLocal son el ÚNICO punto de conversión entre
+// fecha calendario <-> Date en toda la app, y trabajan siempre en hora
+// LOCAL. Nada más en el código debería llamar `new Date(fechaCalendario)`
+// ni `algunDate.toISOString().slice(0, 10)` para fechas de calendario.
+// ---------------------------------------------------------------------
+
+const RE_FECHA_CALENDARIO = /^\d{4}-\d{2}-\d{2}$/;
+
+function esFechaCalendario(valor) {
+  return typeof valor === 'string' && RE_FECHA_CALENDARIO.test(valor);
+}
+
+// 'YYYY-MM-DD' -> Date a medianoche LOCAL de ese día (nunca UTC).
+function parseLocalDate(fechaIso) {
+  const [year, month, day] = fechaIso.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+// Date -> 'YYYY-MM-DD' a partir de los componentes LOCALES. Nunca usar
+// toISOString() para esto: siempre serializa en UTC y puede correr el día.
+function formatIsoDateLocal(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// Convierte CUALQUIER valor de fecha guardado (calendario, timestamp, o ya
+// un Date) a un objeto Date listo para mostrar/comparar en hora local. Este
+// es el único lugar de la app que debería inspeccionar el formato.
+function aFechaLocal(valor) {
+  if (valor instanceof Date) return valor;
+  if (esFechaCalendario(valor)) return parseLocalDate(valor);
+  return new Date(valor);
+}
+
+// Suma (o resta, con N negativo) días de calendario a una fecha calendario
+// sin pasar nunca por UTC. Reemplaza cualquier
+// `new Date(f); d.setDate(d.getDate()+N); d.toISOString().slice(0,10)`.
+function sumarDiasFecha(fechaIso, dias) {
+  const d = parseLocalDate(fechaIso);
+  d.setDate(d.getDate() + dias);
+  return formatIsoDateLocal(d);
+}
+
+function todayIsoDate() {
+  return formatIsoDateLocal(new Date());
+}
+
 function formatFecha(isoOrDate) {
-  const d = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate;
+  const d = aFechaLocal(isoOrDate);
   if (isNaN(d)) return '';
   return d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function formatFechaCorta(isoOrDate) {
-  const d = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate;
+  const d = aFechaLocal(isoOrDate);
   if (isNaN(d)) return '';
   return d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
 }
 
 function diasDesde(fechaIso) {
-  const inicio = new Date(fechaIso);
+  const inicio = aFechaLocal(fechaIso);
   inicio.setHours(0, 0, 0, 0);
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
@@ -62,16 +130,12 @@ function diasDesde(fechaIso) {
   return diff;
 }
 
-function todayIsoDate() {
-  const d = new Date();
-  const tzOffset = d.getTimezoneOffset() * 60000;
-  return new Date(d - tzOffset).toISOString().slice(0, 10);
-}
-
+// Recordatorios guardan fecha calendario: comparar como texto evita
+// cualquier problema de huso horario (YYYY-MM-DD ordena igual como texto
+// que cronológicamente). "Vencido" = el día ya pasó, no incluye hoy.
 function isVencido(fechaIso) {
-  const f = new Date(fechaIso);
-  f.setHours(23, 59, 59, 999);
-  return f < new Date();
+  if (esFechaCalendario(fechaIso)) return fechaIso < todayIsoDate();
+  return aFechaLocal(fechaIso) < new Date();
 }
 
 // true si un recordatorio "toca hoy": ya venció o es para hoy mismo.
@@ -343,7 +407,7 @@ async function exportarRespaldo() {
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const fecha = new Date().toISOString().slice(0, 10);
+  const fecha = todayIsoDate();
   a.href = url;
   a.download = `cultivarnos-backup-${fecha}.json`;
   document.body.appendChild(a);
@@ -353,10 +417,64 @@ async function exportarRespaldo() {
   await DB.setConfiguracion({ ultimoRespaldo: new Date().toISOString() });
 }
 
-async function importarRespaldoDesdeArchivo(file) {
+// ---------------------------------------------------------------------
+// Validación de respaldos — antes de tocar IndexedDB nos aseguramos de que
+// el archivo realmente tenga forma de respaldo de Cultivarnos. El orden es
+// siempre: 1) leer  2) parsear  3) validar  4) recién ahí confirmar el
+// reemplazo  5) importar. Nunca se limpia ningún store antes de que la
+// validación termine correctamente — ver leerRespaldoDesdeArchivo.
+//
+// Se exige la mínima estructura reconocible (versión numérica, arrays en
+// los campos centrales, forma coherente de cada registro) para distinguir
+// un respaldo real de un JSON válido pero ajeno a la app (ej. "{}" o un
+// archivo de otra herramienta). No se exigen campos nuevos (cantidad,
+// destino, metodoSiembra, etc.) que un respaldo de una versión anterior
+// legítimamente no tenga — esos siguen siendo opcionales.
+// ---------------------------------------------------------------------
+function validarRespaldo(data) {
+  const invalido = () => ({ ok: false, mensaje: 'Este archivo no parece ser un respaldo válido de Cultivarnos. No se modificó ningún dato.' });
+
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return invalido();
+  if (typeof data.version !== 'number' || !Number.isFinite(data.version) || data.version < 1) return invalido();
+  if (!Array.isArray(data.cultivos)) return invalido();
+  if (!Array.isArray(data.eventos)) return invalido();
+  if (data.recordatorios !== undefined && !Array.isArray(data.recordatorios)) return invalido();
+  if (data.fotos !== undefined && !Array.isArray(data.fotos)) return invalido();
+  if (data.conversaciones !== undefined && !Array.isArray(data.conversaciones)) return invalido();
+  if (data.configuracion !== undefined && (typeof data.configuracion !== 'object' || data.configuracion === null || Array.isArray(data.configuracion))) return invalido();
+
+  const tieneId = (x) => typeof x.id === 'number' || typeof x.id === 'string';
+  for (const c of data.cultivos) {
+    if (!c || typeof c !== 'object' || !tieneId(c) || typeof c.especie !== 'string') return invalido();
+  }
+  for (const e of data.eventos) {
+    if (!e || typeof e !== 'object' || !tieneId(e) || typeof e.cultivoId === 'undefined' || typeof e.tipo !== 'string' || typeof e.fecha !== 'string') return invalido();
+  }
+  for (const r of data.recordatorios || []) {
+    if (!r || typeof r !== 'object' || typeof r.titulo !== 'string' || typeof r.fecha !== 'string') return invalido();
+  }
+  for (const f of data.fotos || []) {
+    if (!f || typeof f !== 'object' || typeof f.dataUrl !== 'string') return invalido();
+  }
+
+  return { ok: true };
+}
+
+// Lee, parsea y valida un archivo de respaldo SIN tocar IndexedDB. Tira un
+// Error con mensaje amigable si el archivo no es JSON válido o no tiene
+// forma de respaldo de Cultivarnos, para que el llamador pueda mostrarlo y
+// recién DESPUÉS (nunca antes) pedir confirmación de reemplazo.
+async function leerRespaldoDesdeArchivo(file) {
   const text = await file.text();
-  const data = JSON.parse(text);
-  await DB.importAll(data, { replace: true });
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (err) {
+    throw new Error('Este archivo no es un JSON válido. No se modificó ningún dato.');
+  }
+  const validacion = validarRespaldo(data);
+  if (!validacion.ok) throw new Error(validacion.mensaje);
+  return data;
 }
 
 function escapeHtml(str) {

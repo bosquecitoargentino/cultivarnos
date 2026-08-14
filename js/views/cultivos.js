@@ -30,7 +30,7 @@ async function renderCultivoCardHtml(cultivo) {
 
 async function renderCultivos(root) {
   const cultivos = await DB.getAllCultivos();
-  cultivos.sort((a, b) => new Date(b.fechaInicio) - new Date(a.fechaInicio));
+  cultivos.sort((a, b) => aFechaLocal(b.fechaInicio) - aFechaLocal(a.fechaInicio));
 
   root.innerHTML = `
     <div class="view-header">

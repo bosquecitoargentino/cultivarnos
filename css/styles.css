@@ -555,6 +555,7 @@ section + section { margin-top: 20px; }
 }
 
 .chip-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip-group-disabled { opacity: 0.55; pointer-events: none; }
 .chip-option {
   padding: 10px 16px;
   border-radius: 999px;
@@ -1348,6 +1349,46 @@ button.link-ver-todas:active { transform: scale(0.98); }
 }
 .siembra-modal-error.hidden { display: none; }
 .siembra-destinos-sugeridos { margin-top: 8px; }
+#baja-destino-group.hidden { display: none; }
+
+/* Distribución actual: compacta, mobile-first (fila por ubicación) */
+.distribucion-siembra {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--borde);
+}
+.distribucion-titulo {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--texto-suave);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 8px;
+}
+.distribucion-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.distribucion-fila {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.distribucion-icono { flex: 0 0 auto; }
+.distribucion-ubicacion {
+  flex: 1 1 auto;
+  color: var(--texto);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.distribucion-cantidad {
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: var(--verde-oscuro);
+}
 .timeline-siembra {
   margin-top: 4px;
   font-size: 13px;

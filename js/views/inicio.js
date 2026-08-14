@@ -13,13 +13,20 @@ async function renderInicio(root) {
   const paraHoy = recordatorios.filter((r) => esParaHoy(r.fecha));
   const observarHoy = await construirQueObservarHoy(activos);
 
+  // "Todo al día" solo si NO hay recordatorios pendientes para hoy NI
+  // cultivos sugeridos por "Qué observar hoy" — antes solo miraba los
+  // recordatorios, así que podía decir "Todo al día" mientras debajo se
+  // sugería revisar un cultivo hace días sin observaciones (punto 8).
   let resumen;
   if (!cultivos.length) {
     resumen = 'Registrá tu primer cultivo para empezar';
   } else {
     const n = activos.length;
     const base = `${n} cultivo${n === 1 ? '' : 's'} activo${n === 1 ? '' : 's'}`;
-    resumen = paraHoy.length ? `${base} · ${paraHoy.length} para revisar hoy` : `${base} · Todo al día`;
+    const partes = [];
+    if (paraHoy.length) partes.push(`${paraHoy.length} recordatorio${paraHoy.length === 1 ? '' : 's'}`);
+    if (observarHoy.length) partes.push(`${observarHoy.length} para observar`);
+    resumen = partes.length ? `${base} · ${partes.join(' · ')}` : `${base} · Todo al día 🌱`;
   }
 
   root.innerHTML = `
@@ -96,9 +103,7 @@ async function renderInicio(root) {
         setTimeout(() => renderInicio(root), 220);
       } else if (btn.dataset.action === 'posponer') {
         const rec = recordatorios.find((r) => r.id === id);
-        const nueva = new Date(rec.fecha);
-        nueva.setDate(nueva.getDate() + 3);
-        await DB.updateRecordatorio(id, { fecha: nueva.toISOString().slice(0, 10) });
+        await DB.updateRecordatorio(id, { fecha: sumarDiasFecha(rec.fecha, 3) });
         showToast('Recordatorio pospuesto 3 días');
         renderInicio(root);
       }

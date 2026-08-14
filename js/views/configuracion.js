@@ -109,18 +109,19 @@ async function renderConfiguracion(root) {
   root.querySelector('#config-input-import').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const confirmMsg = 'Importar reemplazará todos los datos actuales por los del respaldo. ¿Continuar?';
-    if (!window.confirm(confirmMsg)) {
-      e.target.value = '';
-      return;
-    }
     try {
-      await importarRespaldoDesdeArchivo(file);
+      // Mismo orden obligatorio que el menú superior: leer + parsear +
+      // validar ANTES de preguntar por el reemplazo. Un archivo inválido
+      // nunca llega a tocar IndexedDB ni a mostrar el diálogo de confirmar.
+      const data = await leerRespaldoDesdeArchivo(file);
+      const confirmMsg = 'Importar reemplazará todos los datos actuales por los del respaldo. ¿Continuar?';
+      if (!window.confirm(confirmMsg)) { e.target.value = ''; return; }
+      await DB.importAll(data, { replace: true });
       showToast('Datos importados');
       renderConfiguracion(root);
     } catch (err) {
       console.error(err);
-      showToast('Error al importar el archivo');
+      showToast(err.message || 'Error al importar el archivo');
     } finally {
       e.target.value = '';
     }

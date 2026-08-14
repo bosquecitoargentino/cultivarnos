@@ -2,7 +2,7 @@
 <html lang="es-AR">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Cultivarnos</title>
 <meta name="description" content="Tu cuaderno de cultivo digital" />
 <meta name="theme-color" content="#3f6b45" />
@@ -90,18 +90,20 @@
     document.getElementById('menu-panel').classList.add('hidden');
     const file = e.target.files[0];
     if (!file) return;
-    const confirmMsg = 'Importar reemplazará todos los datos actuales por los del respaldo. ¿Continuar?';
-    if (!window.confirm(confirmMsg)) {
-      e.target.value = '';
-      return;
-    }
     try {
-      await importarRespaldoDesdeArchivo(file);
+      // Orden obligatorio: leer + parsear + validar ANTES de preguntar si
+      // se reemplazan los datos. Si el archivo no es un respaldo válido,
+      // nunca se llega a mostrar el diálogo de confirmación ni se toca
+      // IndexedDB.
+      const data = await leerRespaldoDesdeArchivo(file);
+      const confirmMsg = 'Importar reemplazará todos los datos actuales por los del respaldo. ¿Continuar?';
+      if (!window.confirm(confirmMsg)) { e.target.value = ''; return; }
+      await DB.importAll(data, { replace: true });
       showToast('Datos importados');
       router();
     } catch (err) {
       console.error(err);
-      showToast('Error al importar el archivo');
+      showToast(err.message || 'Error al importar el archivo');
     } finally {
       e.target.value = '';
     }

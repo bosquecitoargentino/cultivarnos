@@ -7,9 +7,13 @@ const ORDEN_ETAPAS = ['germinacion', 'plantula', 'crecimiento', 'floracion', 'pr
 const COOLDOWN_POR_DEFECTO = 5;
 
 function diasEntreFechas(fechaIso, fechaActual) {
-  const inicio = new Date(fechaIso);
+  // fechaIso siempre es fecha calendario (cultivo.fechaInicio / evento.fecha);
+  // fechaActual puede llegar como Date (detalle.js pasa `new Date()`) o como
+  // fecha calendario. aFechaLocal (utils.js) interpreta ambos en hora local,
+  // nunca UTC — ver el comentario extenso en utils.js sobre por qué importa.
+  const inicio = aFechaLocal(fechaIso);
   inicio.setHours(0, 0, 0, 0);
-  const ref = new Date(fechaActual);
+  const ref = aFechaLocal(fechaActual);
   ref.setHours(0, 0, 0, 0);
   return Math.round((ref - inicio) / (1000 * 60 * 60 * 24));
 }

@@ -124,7 +124,11 @@ const DB = {
     // autoincremental, para que el orden sea siempre determinístico y
     // realmente cronológico entre eventos del mismo día.
     return result.sort((a, b) => {
-      const porFecha = new Date(b.fecha) - new Date(a.fecha);
+      // fecha es 'YYYY-MM-DD' (fecha calendario): parseLocalDate evita el
+      // corrimiento de día de `new Date(fecha)` en husos negativos como
+      // Argentina (ver utils.js). createdAt SÍ es timestamp completo, se
+      // compara tal cual con new Date().
+      const porFecha = parseLocalDate(b.fecha) - parseLocalDate(a.fecha);
       if (porFecha !== 0) return porFecha;
       const porCreacion = new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
       if (porCreacion !== 0) return porCreacion;
@@ -144,6 +148,87 @@ const DB = {
   async deleteEvento(id) {
     const store = await tx('eventos', 'readwrite');
     return reqToPromise(store.delete(id));
+  },
+
+  // ---------- BORRADO CENTRALIZADO (evita fotos huérfanas) ----------
+  // Una fotografía puede quedar referenciada desde más de un lugar a la
+  // vez: el evento que la originó Y, si fue la elegida al dar de alta el
+  // cultivo, también desde cultivo.fotoId (nuevo.js reusa el mismo fotoId
+  // para ambos). Por eso nunca se borra una foto solo porque se borra UN
+  // evento — antes hay que confirmar que ninguna otra referencia siga viva.
+
+  // Borra un evento y, si su fotografía queda sin ninguna otra referencia
+  // (ni desde otro evento ni desde cultivo.fotoId), también la fotografía.
+  // Todo en una única transacción: o se borra evento+foto juntos, o no se
+  // borra nada.
+  async deleteEventoCompleto(id) {
+    const [evento, cultivos, todosLosEventos] = await Promise.all([
+      (async () => { const s = await tx('eventos'); return reqToPromise(s.get(id)); })(),
+      this.getAllCultivos(),
+      (async () => { const s = await tx('eventos'); return reqToPromise(s.getAll()); })(),
+    ]);
+    if (!evento) return false;
+
+    let fotoABorrar = null;
+    if (evento.fotoId != null) {
+      const otraReferencia =
+        cultivos.some((c) => c.fotoId === evento.fotoId) ||
+        todosLosEventos.some((e) => e.id !== id && e.fotoId === evento.fotoId);
+      if (!otraReferencia) fotoABorrar = evento.fotoId;
+    }
+
+    const db = await openDB();
+    const storeNames = fotoABorrar != null ? ['eventos', 'fotos'] : ['eventos'];
+    const t = db.transaction(storeNames, 'readwrite');
+    t.objectStore('eventos').delete(id);
+    if (fotoABorrar != null) t.objectStore('fotos').delete(fotoABorrar);
+
+    return new Promise((resolve, reject) => {
+      t.oncomplete = () => resolve(true);
+      t.onerror = () => reject(t.error);
+      t.onabort = () => reject(t.error || new Error('Eliminación abortada'));
+    });
+  },
+
+  // Borra un cultivo completo: el cultivo, todos sus eventos, todos sus
+  // recordatorios, y las fotografías que le pertenecen exclusivamente (las
+  // de sus eventos + la de cultivo.fotoId) — pero solo las que no queden
+  // referenciadas desde algún cultivo/evento que NO se está borrando. Todo
+  // en una única transacción IndexedDB: si algo falla, no queda un cultivo
+  // "a medio borrar" (mitad eliminado, mitad vivo).
+  async deleteCultivoCompleto(id) {
+    const [cultivo, eventos, recordatorios, otrosCultivos, todosLosEventos] = await Promise.all([
+      this.getCultivo(id),
+      this.getEventosByCultivo(id),
+      this.getRecordatoriosByCultivo(id),
+      this.getAllCultivos(),
+      (async () => { const s = await tx('eventos'); return reqToPromise(s.getAll()); })(),
+    ]);
+    if (!cultivo) return false;
+
+    const fotoIdsPropios = new Set();
+    eventos.forEach((e) => { if (e.fotoId != null) fotoIdsPropios.add(e.fotoId); });
+    if (cultivo.fotoId != null) fotoIdsPropios.add(cultivo.fotoId);
+
+    const referenciadosFuera = new Set();
+    otrosCultivos.filter((c) => c.id !== id).forEach((c) => { if (c.fotoId != null) referenciadosFuera.add(c.fotoId); });
+    todosLosEventos.filter((e) => e.cultivoId !== id).forEach((e) => { if (e.fotoId != null) referenciadosFuera.add(e.fotoId); });
+
+    const db = await openDB();
+    const storeNames = ['cultivos', 'eventos', 'recordatorios', 'fotos'];
+    const t = db.transaction(storeNames, 'readwrite');
+    t.objectStore('cultivos').delete(id);
+    eventos.forEach((e) => t.objectStore('eventos').delete(e.id));
+    recordatorios.forEach((r) => t.objectStore('recordatorios').delete(r.id));
+    fotoIdsPropios.forEach((fotoId) => {
+      if (!referenciadosFuera.has(fotoId)) t.objectStore('fotos').delete(fotoId);
+    });
+
+    return new Promise((resolve, reject) => {
+      t.oncomplete = () => resolve(true);
+      t.onerror = () => reject(t.error);
+      t.onabort = () => reject(t.error || new Error('Eliminación abortada'));
+    });
   },
 
   // Minibiblioteca de fotos de un cultivo: no duplica nada, solo lee los
@@ -213,14 +298,14 @@ const DB = {
     const store = await tx('recordatorios');
     const index = store.index('cultivoId');
     const result = await reqToPromise(index.getAll(IDBKeyRange.only(cultivoId)));
-    return result.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    return result.sort((a, b) => parseLocalDate(a.fecha) - parseLocalDate(b.fecha));
   },
 
   async getRecordatoriosPendientes() {
     const store = await tx('recordatorios');
     const index = store.index('estado');
     const result = await reqToPromise(index.getAll(IDBKeyRange.only('pendiente')));
-    return result.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    return result.sort((a, b) => parseLocalDate(a.fecha) - parseLocalDate(b.fecha));
   },
 
   async deleteRecordatorio(id) {

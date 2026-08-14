@@ -131,9 +131,7 @@ function renderNuevo(root) {
   recCheck.addEventListener('change', () => {
     recGroup.classList.toggle('hidden', !recCheck.checked);
     if (recCheck.checked && !root.querySelector('#f-recordatorio-fecha').value) {
-      const d = new Date();
-      d.setDate(d.getDate() + 3);
-      root.querySelector('#f-recordatorio-fecha').value = d.toISOString().slice(0, 10);
+      root.querySelector('#f-recordatorio-fecha').value = sumarDiasFecha(todayIsoDate(), 3);
     }
   });
 
@@ -203,6 +201,7 @@ function renderNuevo(root) {
     const cantidadSiembra = cantidadRaw ? parseInt(cantidadRaw, 10) : null;
     const cantidadValida = Number.isFinite(cantidadSiembra) && cantidadSiembra > 0 ? cantidadSiembra : null;
     const metodoSiembra = tipoInicioSeleccionado === 'semilla' ? metodoSiembraSeleccionado : null;
+    const ubicacionValor = root.querySelector('#f-ubicacion').value.trim() || null;
 
     const cultivoId = await DB.addCultivo({
       especie,
@@ -210,7 +209,7 @@ function renderNuevo(root) {
       tipoInicio: tipoInicioSeleccionado,
       metodoSiembra,
       fechaInicio: fecha,
-      ubicacion: root.querySelector('#f-ubicacion').value.trim() || null,
+      ubicacion: ubicacionValor,
       fotoId,
       nota,
       estado: 'activo',
@@ -218,6 +217,10 @@ function renderNuevo(root) {
 
     // Evento inicial automático: así la ficha arranca su línea de tiempo
     // desde el registro, sin pedirle un paso extra a quien está cargando.
+    // Si el cultivo arranca como "Trasplante", sus unidades ya están en
+    // destino desde el día 0 — reusamos el campo "Ubicación" que la
+    // persona ya completó arriba como ese destino, sin agregar un campo
+    // nuevo al formulario (motor-siembra.js espera esto en `destino`).
     await DB.addEvento({
       cultivoId,
       tipo: 'siembra',
@@ -225,6 +228,7 @@ function renderNuevo(root) {
       nota,
       fotoId,
       cantidad: cantidadValida,
+      destino: (tipoInicioSeleccionado === 'trasplante' && cantidadValida) ? ubicacionValor : undefined,
     });
 
     if (recCheck.checked) {
@@ -271,12 +275,10 @@ function mostrarSeguimientoSugerido(root, cultivoId, especie, sugerencia) {
   `;
 
   root.querySelector('#seguimiento-si').addEventListener('click', async () => {
-    const fecha = new Date();
-    fecha.setDate(fecha.getDate() + sugerencia.dias);
     await DB.addRecordatorio({
       cultivoId,
       titulo: sugerencia.titulo,
-      fecha: fecha.toISOString().slice(0, 10),
+      fecha: sumarDiasFecha(todayIsoDate(), sugerencia.dias),
       estado: 'pendiente',
     });
     showToast('Recordatorio creado');
