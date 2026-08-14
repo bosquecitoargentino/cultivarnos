@@ -36,6 +36,15 @@ async function renderDetalle(id, root) {
     ? { preguntas: [] }
     : obtenerPreguntasActuales(cultivo, eventos, new Date(), config.hemisferio, 3);
 
+  // Integración con la Biblioteca agronómica: si la especie de este
+  // cultivo está reconocida (mismo matcher que ya usa el motor de
+  // observación) y tiene ficha cargada, ofrecemos un link directo — nunca
+  // al revés, esta vista sigue siendo la única fuente del historial real
+  // del cultivo. Si la especie no está en la Biblioteca todavía, el resto
+  // de la ficha funciona exactamente igual que siempre (sin este link).
+  const especieIdParaFicha = typeof identificarEspecie === 'function' ? identificarEspecie(cultivo.especie) : null;
+  const especieEnBiblioteca = especieIdParaFicha && typeof getEspecie === 'function' ? getEspecie(especieIdParaFicha) : null;
+
   root.innerHTML = `
     <div class="detalle-hero">
       <div class="detalle-hero-photo" style="${fotoUrl ? `background-image:url('${fotoUrl}')` : ''}">
@@ -51,6 +60,7 @@ async function renderDetalle(id, root) {
           ${cultivo.estado === 'finalizado' ? `<span class="badge finalizado">Finalizado</span>` : ''}
         </div>
         ${cultivo.nota ? `<div class="detalle-nota">${escapeHtml(cultivo.nota)}</div>` : ''}
+        ${especieEnBiblioteca ? `<a href="#/biblioteca/${especieEnBiblioteca.id}" class="detalle-link-biblioteca">📖 Ver ficha de la especie</a>` : ''}
       </div>
     </div>
 

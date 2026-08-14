@@ -9,19 +9,32 @@ const ROUTES = {
   '#/nuevo': { render: renderNuevo, nav: 'registrar' },
   '#/configuracion': { render: renderConfiguracion, nav: null },
   '#/calendario': { render: renderCalendario, nav: null },
-  // '#/cultivo/:id' se maneja aparte
+  '#/biblioteca': { render: renderBiblioteca, nav: 'biblioteca' },
+  // '#/cultivo/:id' y '#/biblioteca/:id' se manejan aparte
 };
 
 function parseRoute(hash) {
-  const fotosMatch = hash.match(/^#\/cultivo\/(\d+)\/fotos$/);
+  // Separamos el query string (ej. #/nuevo?especie=tomate, usado por
+  // "＋ Registrar este cultivo" desde una ficha de la Biblioteca) antes de
+  // matchear contra ROUTES — así ninguna vista existente necesita cambiar
+  // su forma de registrarse acá, solo recibe un segundo parámetro opcional
+  // que puede ignorar.
+  const [path, queryString] = hash.split('?');
+
+  const fotosMatch = path.match(/^#\/cultivo\/(\d+)\/fotos$/);
   if (fotosMatch) {
     return { render: () => renderGaleriaFotos(Number(fotosMatch[1])), nav: 'cultivos' };
   }
-  const detalleMatch = hash.match(/^#\/cultivo\/(\d+)$/);
+  const detalleMatch = path.match(/^#\/cultivo\/(\d+)$/);
   if (detalleMatch) {
     return { render: () => renderDetalle(Number(detalleMatch[1])), nav: 'cultivos' };
   }
-  return ROUTES[hash] || ROUTES['#/inicio'];
+  const fichaMatch = path.match(/^#\/biblioteca\/([a-z0-9-]+)$/);
+  if (fichaMatch) {
+    return { render: (root) => renderFichaEspecie(fichaMatch[1], root), nav: 'biblioteca' };
+  }
+  const base = ROUTES[path] || ROUTES['#/inicio'];
+  return { render: (root) => base.render(root, queryString), nav: base.nav };
 }
 
 async function router() {

@@ -1395,3 +1395,160 @@ button.link-ver-todas:active { transform: scale(0.98); }
   color: var(--verde-oscuro);
   font-weight: 500;
 }
+
+/* ---------- Biblioteca (lista + búsqueda) ---------- */
+.biblioteca-buscador { margin-bottom: 12px; }
+.biblioteca-categorias { margin-bottom: 16px; }
+
+.especies-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.especie-card {
+  background: var(--crema-card);
+  border-radius: var(--radio);
+  overflow: hidden;
+  box-shadow: var(--sombra);
+  display: flex;
+  flex-direction: column;
+  animation: fadeInUp var(--dur) var(--ease) backwards;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  cursor: pointer;
+}
+.especie-card:active {
+  transform: scale(0.97);
+  box-shadow: 0 1px 4px rgba(47, 79, 52, 0.1);
+}
+.especies-grid .especie-card:nth-child(1) { animation-delay: 0.02s; }
+.especies-grid .especie-card:nth-child(2) { animation-delay: 0.06s; }
+.especies-grid .especie-card:nth-child(3) { animation-delay: 0.1s; }
+.especies-grid .especie-card:nth-child(4) { animation-delay: 0.14s; }
+.especies-grid .especie-card:nth-child(n+5) { animation-delay: 0.16s; }
+.especie-card-photo {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: var(--verde-suave) center/cover no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  color: var(--verde-claro);
+}
+.especie-card-body { padding: 8px 10px 10px; }
+.especie-card-nombre {
+  font-weight: 700;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.especie-card-cientifico {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--texto-suave);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.especie-card-meta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--verde);
+  font-weight: 600;
+}
+
+/* ---------- Ficha de especie (Biblioteca) ---------- */
+.detalle-link-biblioteca {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--verde);
+}
+
+.ficha-hero {
+  border-radius: var(--radio);
+  overflow: hidden;
+  background: var(--verde-suave);
+  box-shadow: var(--sombra);
+  margin-bottom: 16px;
+  animation: fadeInUp var(--dur) var(--ease);
+}
+.ficha-hero-photo {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--verde-suave) center/cover no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 46px;
+  color: var(--verde-claro);
+}
+.ficha-hero-body { padding: 14px 16px; background: var(--crema-card); }
+.ficha-hero-nombre { font-size: 20px; font-weight: 800; color: var(--verde-oscuro); }
+.ficha-hero-cientifico { font-size: 13px; font-style: italic; color: var(--texto-suave); margin-top: 2px; }
+
+.ficha-seccion {
+  background: var(--crema-card);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.ficha-resumen {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  color: var(--texto);
+  line-height: 1.5;
+}
+.ficha-resumen li { margin-bottom: 2px; }
+
+.ficha-fila {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 0;
+}
+.ficha-fila + .ficha-fila { border-top: 1px solid var(--borde); }
+.ficha-fila-icono { flex: 0 0 auto; font-size: 16px; line-height: 1.4; }
+.ficha-fila-texto { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ficha-fila-label { font-size: 11px; font-weight: 700; color: var(--verde-oscuro); text-transform: uppercase; letter-spacing: 0.2px; }
+.ficha-fila-valor { font-size: 14px; color: var(--texto); line-height: 1.4; }
+
+.ficha-calendario-nota {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0 2px;
+  border-top: 1px solid var(--borde);
+  margin-top: 4px;
+}
+.ficha-calendario-disclaimer {
+  font-size: 11px;
+  color: var(--texto-suave);
+  margin: 6px 0 0;
+}
+
+.ficha-etapas { display: flex; flex-direction: column; gap: 12px; }
+.ficha-etapa { position: relative; padding-left: 16px; }
+.ficha-etapa::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 6px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--verde-claro);
+}
+.ficha-etapa-titulo { font-size: 14px; font-weight: 700; color: var(--verde-oscuro); }
+.ficha-etapa-dias { font-size: 12px; font-weight: 500; color: var(--texto-suave); }
+.ficha-etapa-observar {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--texto);
+  line-height: 1.45;
+}
+.ficha-etapa-observar li { margin-bottom: 2px; }

@@ -27,8 +27,18 @@ function sumarMeses(mes, cantidad) {
 }
 
 // { almacigo: [...], directa: [...] } resuelto para el hemisferio pedido.
+//
+// Fuente de datos: si la especie ya está cargada en la Biblioteca
+// agronómica (data/biblioteca-especies.js) y tiene calendario templado,
+// ESA es la fuente de verdad — se usa en vez de cultivos-data.js, para no
+// mantener dos calendarios distintos para la misma especie. Si la especie
+// todavía no está en la Biblioteca (o no tiene calendario cargado), se seguí
+// usando cultivos-data.js exactamente como antes. Capa de compatibilidad
+// transitoria mientras se migran más especies a la Biblioteca — ver
+// motor-biblioteca.js#obtenerSiembraLibreria.
 function obtenerVentanaSiembra(cultivoData, hemisferio) {
-  const siembra = cultivoData.siembra || {};
+  const desdeLibreria = typeof obtenerSiembraLibreria === 'function' ? obtenerSiembraLibreria(cultivoData.id) : null;
+  const siembra = desdeLibreria || cultivoData.siembra || {};
   const sur = siembra.hemisferioSur || { almacigo: [], directa: [] };
   if (hemisferio === 'norte') {
     if (siembra.hemisferioNorte) return siembra.hemisferioNorte;
@@ -41,11 +51,15 @@ function obtenerVentanaSiembra(cultivoData, hemisferio) {
 }
 
 // Ventana aproximada de trasplante: se deriva sumando al inicio del
-// almácigo el promedio de trasplanteDias (convertido a meses). Es una
-// estimación adicional, no un dato cargado — por eso se muestra siempre
-// como "aproximado" en la interfaz.
+// almácigo el promedio de días orientativos de trasplante (convertido a
+// meses). Es una estimación adicional, no un dato cargado — por eso se
+// muestra siempre como "aproximado" en la interfaz. Los días se leen
+// primero de la Biblioteca (si la especie los tiene) y si no, de
+// cultivos-data.js, con el mismo criterio de compatibilidad que
+// obtenerVentanaSiembra.
 function obtenerVentanaTrasplante(cultivoData, hemisferio) {
-  const trasplanteDias = (cultivoData.etapas || {}).trasplanteDias;
+  const desdeLibreria = typeof obtenerTrasplanteDiasLibreria === 'function' ? obtenerTrasplanteDiasLibreria(cultivoData.id) : null;
+  const trasplanteDias = desdeLibreria || (cultivoData.etapas || {}).trasplanteDias;
   if (!trasplanteDias) return [];
   const almacigo = obtenerVentanaSiembra(cultivoData, hemisferio).almacigo || [];
   if (!almacigo.length) return [];

@@ -1,6 +1,6 @@
 // views/nuevo.js — vista Nuevo cultivo
 
-function renderNuevo(root) {
+function renderNuevo(root, queryString) {
   let fotoBlob = null;
   let fotoPreviewUrl = null;
   let tipoInicioSeleccionado = 'semilla';
@@ -88,6 +88,20 @@ function renderNuevo(root) {
   `;
 
   root.querySelector('#f-fecha').value = todayIsoDate();
+
+  // Preselección desde la Biblioteca: "＋ Registrar este cultivo" en una
+  // ficha de especie llega acá como #/nuevo?especie=<id>. Completamos el
+  // campo Especie con el nombre común de la Biblioteca, pero queda
+  // editable como cualquier otro campo — nunca se guarda el id de la
+  // Biblioteca en el cultivo, solo el texto libre de siempre.
+  if (queryString) {
+    const params = new URLSearchParams(queryString);
+    const especieId = params.get('especie');
+    const especieLibreria = especieId && typeof getEspecie === 'function' ? getEspecie(especieId) : null;
+    if (especieLibreria) {
+      root.querySelector('#f-especie').value = especieLibreria.identidad.nombre;
+    }
+  }
 
   // Tipo de inicio chips — decide qué pide la sección "Siembra" de abajo:
   // semilla ofrece elegir semillero/siembra directa + unidades sembradas;
