@@ -11,7 +11,7 @@
 // (ej. la pantalla de Configuración) NO tiene su propia copia del número:
 // lo consulta en tiempo de ejecución mandándole un mensaje a este Service
 // Worker (ver utils.js#obtenerVersionApp). Una sola fuente de verdad real.
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 
 const CACHE_NAME = `cultivarnos-v${APP_VERSION}`;
 const APP_SHELL = [
@@ -79,8 +79,9 @@ const APP_SHELL = [
   './assets/cultivos/banano.webp',
 ];
 
-// Ampliación de la Biblioteca (ahora 121 especies, incluida la nueva
-// categoría "🌸 Flores" con 19 especies nuevas): a propósito NO agregamos
+// Ampliación de la Biblioteca (ahora 123 especies, incluida la categoría
+// "🌸 Flores" con 19 especies nuevas más Achiras, y Pasto limón como
+// especie aromática): a propósito NO agregamos
 // acá las imágenes nuevas de assets/cultivos/. Precachear cada WebP nuevo
 // engordaría el App Shell y demoraría la instalación/actualización sin
 // necesidad real — el listener de 'fetch' de abajo ya cachea en tiempo de

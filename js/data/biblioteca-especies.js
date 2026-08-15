@@ -8641,6 +8641,160 @@ const BIBLIOTECA_ESPECIES = [
       principiosManejo: ['En zonas de heladas, levantar y guardar el tubérculo tras la primera helada que ennegrece el follaje', 'Tutorar temprano, antes de que la planta gane peso'],
     },
   },
+
+  // ---------------------------------------------------------------------
+  // Faltantes puntuales detectados en uso real de la app (2 especies).
+  // Pasto elefante NO se duplica acá — ya existe más arriba (categoría
+  // 'servicio', tipoSeguimiento 'servicio', con etapas establecimiento/
+  // crecimiento/acumulacion_biomasa/poda/rebrote) y ya es encontrable por
+  // nombre exacto en la búsqueda; no hacía falta ninguna categoría nueva
+  // (biomasa/gramínea/perenne) para eso, ese matiz ya está cubierto por
+  // identidad.grupoAgronomico ("gramínea forrajera perenne...") y
+  // ecologia.funciones ("banco_de_biomasa"). Pasto limón y Achiras sí eran
+  // faltantes reales, agregados con la arquitectura existente sin abrir
+  // categorías nuevas: "gramínea/perenne/medicinal/ornamental/rizomatosa/
+  // biomasa" quedan representados con los campos de texto que ya existían
+  // (ciclo, tipoCrecimiento, grupoAgronomico, ecologia.funciones) en vez
+  // de sumar chips de filtro nuevos.
+  // ---------------------------------------------------------------------
+  {
+    id: 'pasto-limon',
+    identidad: {
+      nombre: 'Pasto limón',
+      nombreCientifico: 'Cymbopogon citratus',
+      familia: 'Poaceae',
+      grupoAgronomico: 'gramínea aromática y medicinal perenne',
+      categorias: ['aromatica'],
+      ciclo: 'perenne',
+      estrato: null,
+      tipoCrecimiento: 'gramínea perenne en macolla densa, no rizomatosa ni invasiva',
+      tipoSeguimiento: 'aromatica_perenne',
+      organoCosechado: 'hoja (aromática/medicinal, infusión)',
+      especieBase: null,
+      aliases: ['té limón', 'limoncillo', 'lemongrass'],
+      notaTaxonomica: 'no confundir con la citronela (Cymbopogon nardus / C. winterianus), especie emparentada pero distinta, cultivada sobre todo por su aceite esencial repelente; el pasto limón (C. citratus) es el de uso culinario e infusión',
+    },
+    visual: { imagen: 'assets/cultivos/pasto-limon.webp', icono: '🌿' },
+    origen: {
+      estatus: 'introducida',
+      regionReferencia: 'Sur de Asia (India, Sri Lanka)',
+      observacion: 'Muy difundida en huertas y patios de Argentina por su uso en infusiones.',
+    },
+    siembra: {
+      metodos: ['division_de_matas'],
+      metodoPreferido: 'division_de_matas',
+      profundidadCm: null,
+      semillasPorCelda: null,
+      germinacionDias: [15, 25],
+      temperaturaGerminacion: { minima: null, ideal: null, maxima: null },
+      trasplante: { recomendado: true, diasOrientativos: [20, 30], hojasVerdaderasOrientativas: null },
+    },
+    calendario: { templado: { hemisferioSur: { almacigo: [], directa: [9, 10, 11] } } },
+    ambiente: {
+      luz: { nivel: 'sol_pleno', horasMinimas: 6, notas: 'Tolera media sombra, con menos vigor.' },
+      agua: { demanda: 'media', sensibilidadSequia: 'media', notas: 'Tolera períodos secos una vez establecido.' },
+      temperatura: { minima: 2, ideal: [22, 32], maxima: 38, sensibilidadFrio: 'alta', notas: 'El follaje se daña con heladas; en zonas de heladas fuertes conviene proteger la base con mulch grueso o cultivar en maceta resguardada.' },
+      suelo: { tipoPreferido: 'franco, fértil, bien drenado', drenaje: 'bueno', phIdeal: null },
+    },
+    manejo: {
+      distanciaCm: [40, 60],
+      tutorado: 'no requiere',
+      poda: 'corte de hojas exteriores para cosecha continua; retiro de hojas secas',
+      coberturaSuelo: 'macolla densa, cobertura parcial del suelo alrededor',
+      demandaFertilidad: 'media',
+    },
+    etapas: {
+      tipo: 'horticola_estandar',
+      germinacion: { diasOrientativos: [15, 25], observar: ['¿La división prendió y muestra brotes nuevos desde la base?'] },
+      plantula: { diasOrientativos: [25, 45], observar: ['¿La macolla está formando nuevos brotes agrupados?'] },
+      crecimiento: { diasOrientativos: [45, 90], observar: ['¿La mata está densificando bien, sin espacios pelados?'] },
+      floracion: { diasOrientativos: null, observar: ['Rara vez florece en cultivo de huerta; si aparece una inflorescencia, no afecta la cosecha de hojas.'] },
+      produccion: { diasOrientativos: null, observar: ['¿Las hojas exteriores alcanzan buen tamaño para cosechar sin debilitar la mata?'] },
+      senescencia: { diasOrientativos: null, observar: ['¿El centro de la macolla se ve leñoso o ralo, señal de que conviene dividirla?'] },
+    },
+    cosecha: {
+      diasDesdeSiembra: [90, 120],
+      tipo: 'por corte/rebrote (hojas exteriores)',
+      indicadoresMadurez: ['Hojas de al menos 30-40 cm', 'Base del tallo con buen grosor y aroma cítrico marcado al frotar'],
+      frecuenciaOrientativaDias: [20, 30],
+    },
+    ecologia: {
+      demandaFertilidad: 'media',
+      coberturaRecomendada: true,
+      funciones: ['aromatica_medicinal', 'barrera_o_borde_denso', 'repelente_de_algunos_insectos'],
+      interaccionesAObservar: ['¿La macolla actúa como barrera o borde denso frente a otras plantas?', '¿Se nota menor presencia de algunos insectos cerca de la planta?'],
+      principiosManejo: ['Dividir la mata cada 2-3 años para renovar vigor y multiplicar plantines', 'En zonas de heladas fuertes, proteger la base con mulch grueso o cultivar en maceta resguardada'],
+    },
+  },
+  {
+    id: 'achiras',
+    identidad: {
+      nombre: 'Achiras',
+      nombreCientifico: 'Canna indica',
+      familia: 'Cannaceae',
+      grupoAgronomico: 'ornamental de flor y follaje, rizomatosa',
+      categorias: ['flor'],
+      ciclo: 'perenne rizomatosa',
+      estrato: null,
+      tipoCrecimiento: 'herbácea erecta de gran porte, hojas anchas',
+      tipoSeguimiento: 'horticola',
+      organoCosechado: 'flor (ornamental) y rizoma (uso tradicional como fécula en algunas variedades, ej. Canna edulis)',
+      especieBase: null,
+      aliases: ['achira', 'cañacoro'],
+      notaTaxonomica: 'el género Canna incluye numerosas especies e híbridos ornamentales (Canna indica, C. generalis) y al menos una cultivada tradicionalmente por su rizoma rico en almidón (Canna edulis, "achira" en el NOA argentino y la región andina); sin identificar la variedad exacta, esta ficha describe el manejo general del género en su uso ornamental y de borde',
+    },
+    visual: { imagen: 'assets/cultivos/achiras.webp', icono: '🌺' },
+    origen: {
+      estatus: 'nativa',
+      regionReferencia: 'América tropical y subtropical, incluido el norte de Argentina',
+      observacion: 'Ampliamente cultivada y naturalizada en jardines de toda Argentina; algunas variedades de rizoma comestible tienen uso tradicional en el NOA y la región andina.',
+    },
+    siembra: {
+      metodos: ['division_de_rizoma'],
+      metodoPreferido: 'division_de_rizoma',
+      profundidadCm: [8, 12],
+      semillasPorCelda: null,
+      germinacionDias: [15, 30],
+      temperaturaGerminacion: { minima: 15, ideal: [20, 28], maxima: 32 },
+      trasplante: { recomendado: false, diasOrientativos: null, hojasVerdaderasOrientativas: null },
+    },
+    calendario: { templado: { hemisferioSur: { almacigo: [], directa: [9, 10, 11] } } },
+    ambiente: {
+      luz: { nivel: 'sol_pleno', horasMinimas: 6, notas: 'Tolera media sombra, con menor floración.' },
+      agua: { demanda: 'media_alta', sensibilidadSequia: 'media', notas: 'Prefiere humedad constante; tolera anegamiento breve mejor que la mayoría de las ornamentales.' },
+      temperatura: { minima: 0, ideal: [20, 30], maxima: 35, sensibilidadFrio: 'media', notas: 'El follaje se daña con heladas; el rizoma sobrevive en el suelo en climas templados y rebrota en primavera.' },
+      suelo: { tipoPreferido: 'franco, fértil', drenaje: 'bueno, tolera algo de humedad', phIdeal: null },
+    },
+    manejo: {
+      distanciaCm: [40, 60],
+      tutorado: 'no requiere',
+      poda: 'corte de tallos florecidos y hojas secas; división de rizomas cada 2-4 años para renovar vigor',
+      coberturaSuelo: 'follaje denso y ancho, buena cobertura y sombreado del suelo alrededor',
+      demandaFertilidad: 'media',
+    },
+    etapas: {
+      tipo: 'horticola_estandar',
+      germinacion: { diasOrientativos: [15, 30], observar: ['¿Emergieron los primeros brotes desde el rizoma plantado?'] },
+      plantula: { diasOrientativos: [30, 55], observar: ['¿Las hojas anchas características ya se distinguen bien?'] },
+      crecimiento: { diasOrientativos: [55, 90], observar: ['¿La planta está ganando altura y follaje de forma pareja?'] },
+      floracion: { diasOrientativos: [90, 130], observar: ['¿Se abrieron los primeros racimos florales?', '¿Qué polinizadores (colibríes, abejas) visitan las flores?'] },
+      produccion: { diasOrientativos: [130, 220], observar: ['¿La floración se mantiene escalonada con nuevos tallos?'] },
+      senescencia: { diasOrientativos: null, observar: ['¿El follaje se dañó con la primera helada, señal de que el rizoma entra en reposo?'] },
+    },
+    cosecha: {
+      diasDesdeSiembra: null,
+      tipo: 'flor de corte ocasional; rizoma para multiplicación o, en variedades tradicionales, para fécula',
+      indicadoresMadurez: ['Flor recién abierta para corte', 'Rizomas de al menos 1-2 años para división o cosecha de fécula'],
+      frecuenciaOrientativaDias: null,
+    },
+    ecologia: {
+      demandaFertilidad: 'media',
+      coberturaRecomendada: true,
+      funciones: ['atrae_polinizadores', 'ornamental', 'cobertura_y_sombreado_de_suelo', 'biomasa_de_hojas_grandes'],
+      interaccionesAObservar: ['¿Qué polinizadores (colibríes, abejas) visitan las flores?', '¿La mata se está expandiendo por rizoma más allá del sector plantado?'],
+      principiosManejo: ['Dividir los rizomas cada pocos años para controlar el tamaño de la mata y renovar vigor', 'Usarla como borde o cortina baja por su follaje denso y floración vistosa'],
+    },
+  },
 ];
 
 // Devuelve la ficha completa de una especie por id, o null si no está en
