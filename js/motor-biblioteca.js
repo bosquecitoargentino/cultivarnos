@@ -21,6 +21,7 @@ const CATEGORIAS_BIBLIOTECA = [
   { id: 'aromatica', label: 'Aromáticas' },
   { id: 'servicio', label: 'Servicio' },
   { id: 'agroforestal', label: 'Agroforestales' },
+  { id: 'flor', label: '🌸 Flores' },
   // Nativas NO es una categoría botánica más (una especie nativa puede ser
   // a la vez "fruto", "aromática", "agroforestal", etc.) — es un corte
   // transversal sobre el mismo listado, derivado de especie.origen.estatus.
