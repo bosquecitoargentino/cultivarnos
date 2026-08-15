@@ -1119,16 +1119,8 @@ section + section { margin-top: 20px; }
   line-height: 1;
 }
 
-/* ---------- Qué observar ahora / Revisión guiada ---------- */
-.observar-vacio {
-  text-align: center;
-  padding: 14px 10px;
-  background: var(--crema-card);
-  border-radius: var(--radio-chico);
-  box-shadow: var(--sombra);
-}
-.observar-vacio p { font-size: 13px; color: var(--texto-suave); margin: 0 0 8px; }
-
+/* ---------- Recibir una sugerencia (una pregunta a la vez, nunca un
+   cuestionario — ver detalle.js#pintarSugerenciaObservacion) ---------- */
 button.link-ver-todas {
   background: none;
   border: none;
@@ -1139,52 +1131,66 @@ button.link-ver-todas {
 }
 button.link-ver-todas:active { transform: scale(0.98); }
 
-.observar-lista { display: flex; flex-direction: column; gap: 10px; }
-.observar-item {
+#btn-recibir-sugerencia {
+  width: auto;
+  padding: 8px 4px;
+  text-align: left;
+}
+
+.sugerencia-card {
   background: var(--crema-card);
   border-radius: var(--radio-chico);
-  padding: 12px 14px;
+  padding: 14px;
   box-shadow: var(--sombra);
   animation: fadeInUp var(--dur) var(--ease) backwards;
-  transition: opacity 0.2s ease;
 }
-.observar-item.resuelto { opacity: 0.6; }
-.observar-pregunta {
-  font-size: 14px;
+.sugerencia-titulo {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--texto-suave);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 8px;
+}
+.sugerencia-pregunta {
+  font-size: 16px;
   font-weight: 700;
   color: var(--verde-oscuro);
-  margin-bottom: 10px;
-  line-height: 1.3;
+  line-height: 1.35;
+  margin-bottom: 14px;
 }
-.observar-opciones { display: flex; flex-wrap: wrap; gap: 8px; }
-.observar-opcion {
-  padding: 9px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--borde);
-  background: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--texto-suave);
-  cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
-}
-.observar-opcion:active { transform: scale(0.95); }
-.observar-opcion.selected {
-  background: var(--verde);
-  border-color: var(--verde);
-  color: #fff;
-  animation: popIn 0.2s var(--ease);
-}
-.observar-opcion:disabled:not(.selected) { opacity: 0.45; }
-.observar-pista {
-  margin-top: 10px;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--verde-oscuro);
-  background: var(--verde-suave);
-  padding: 8px 10px;
+.sugerencia-botones { display: flex; flex-direction: column; gap: 4px; }
+.sugerencia-botones .btn-primary { width: 100%; }
+.sugerencia-botones .link-ver-todas { text-align: center; }
+
+.sugerencia-vacio {
+  text-align: center;
+  padding: 14px 10px;
+  background: var(--crema-card);
   border-radius: var(--radio-chico);
+  box-shadow: var(--sombra);
 }
+.sugerencia-vacio p { font-size: 13px; color: var(--texto-suave); margin: 0 0 8px; line-height: 1.4; }
+
+/* Contexto de la pregunta dentro del modal "Registrar lo que veo" */
+.sugerencia-contexto {
+  background: var(--verde-suave);
+  border-radius: var(--radio-chico);
+  padding: 10px 12px;
+  margin-bottom: 16px;
+}
+.sugerencia-contexto-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--verde-oscuro);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 4px;
+}
+.sugerencia-contexto-texto { font-size: 13px; color: var(--verde-oscuro); line-height: 1.4; }
+
+/* Oferta de acción/recordatorio tras un evento (usada también al crear un
+   cultivo — ver nuevo.js#creado-oferta) — sin cambios, sigue vigente. */
 .observar-oferta {
   margin-top: 10px;
   display: flex;
@@ -1201,47 +1207,6 @@ button.link-ver-todas:active { transform: scale(0.98); }
 }
 .observar-oferta-botones { display: flex; gap: 6px; flex-shrink: 0; }
 
-/* ---------- Sesión de revisión guiada (modal paso a paso) ---------- */
-.revision-progreso {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--texto-suave);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  margin-bottom: 10px;
-}
-.revision-pregunta {
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--verde-oscuro);
-  line-height: 1.3;
-  margin-bottom: 16px;
-}
-.revision-opciones .observar-opcion { padding: 12px 16px; font-size: 14px; }
-#revision-omitir { margin-top: 18px; }
-.revision-resumen-titulo {
-  font-size: 19px;
-  font-weight: 800;
-  color: var(--verde-oscuro);
-  text-align: center;
-  margin-bottom: 14px;
-}
-.revision-resumen-lista {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-.revision-resumen-item {
-  font-size: 13px;
-  color: var(--texto);
-  background: var(--crema-card);
-  border-radius: var(--radio-chico);
-  padding: 9px 10px;
-}
-.revision-resumen-vacio { font-size: 13px; color: var(--texto-suave); margin-bottom: 14px; }
-.revision-ofertas { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
-
 /* ---------- Respuestas estructuradas en el historial ---------- */
 .timeline-respuestas {
   margin-top: 6px;
@@ -1251,22 +1216,12 @@ button.link-ver-todas:active { transform: scale(0.98); }
 }
 .timeline-respuesta { font-size: 12px; color: var(--texto); }
 .timeline-respuesta strong { color: var(--verde-oscuro); }
-
-/* ---------- Qué observar hoy (Inicio) ---------- */
-.observar-hoy-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--crema-card);
-  border-radius: var(--radio-chico);
-  padding: 12px 14px;
-  box-shadow: var(--sombra);
-  animation: fadeInUp var(--dur) var(--ease) backwards;
+.timeline-pregunta-contexto {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--verde-oscuro);
+  line-height: 1.4;
 }
-.observar-hoy-item + .observar-hoy-item { margin-top: 8px; }
-.observar-hoy-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.observar-hoy-especie { font-weight: 700; font-size: 14px; color: var(--verde-oscuro); }
-.observar-hoy-sub { font-size: 12px; color: var(--texto-suave); }
 
 /* ---------- Seguimiento sugerido tras crear un cultivo ---------- */
 .creado-confirmacion {

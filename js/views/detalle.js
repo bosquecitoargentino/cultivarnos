@@ -36,12 +36,6 @@ async function renderDetalle(id, root) {
   // a calcular días de seguimiento por su cuenta.
   const resumen = generarResumenCultivo(cultivo, eventos);
 
-  // Qué observar ahora: motor local, sin IA — no tiene sentido seguir
-  // sugiriendo observaciones sobre un cultivo ya finalizado.
-  const observar = cultivo.estado === 'finalizado'
-    ? { preguntas: [] }
-    : obtenerPreguntasActuales(cultivo, eventos, new Date(), config.hemisferio, 3);
-
   // Integración con la Biblioteca agronómica: si la especie de este
   // cultivo está reconocida y tiene ficha cargada, ofrecemos un link
   // directo — nunca al revés, esta vista sigue siendo la única fuente del
@@ -99,8 +93,7 @@ async function renderDetalle(id, root) {
 
     ${cultivo.estado !== 'finalizado' ? `
     <section>
-      <div class="section-title">Qué observar ahora 🌱</div>
-      <div id="observar-ahora"></div>
+      <div id="sugerencia-observacion"></div>
     </section>` : ''}
 
     ${pendientes.length ? `
@@ -192,46 +185,14 @@ async function renderDetalle(id, root) {
     });
   }
 
-  // Qué observar ahora: preguntas rápidas del motor de observación (sin IA,
-  // sin diagnóstico — solo guía sobre qué mirar). Cada respuesta se guarda
-  // al toque en el historial; si la pregunta trae una acción o recordatorio
-  // asociado, se ofrece — nunca se crea nada sin confirmación.
-  const observarWrap = root.querySelector('#observar-ahora');
-  if (observarWrap) {
-    observarWrap.innerHTML = renderObservarAhoraHtml(observar.preguntas);
-    observarWrap.addEventListener('click', async (e) => {
-      const opcionBtn = e.target.closest('.observar-opcion');
-      if (opcionBtn) {
-        const preguntaId = opcionBtn.dataset.preguntaId;
-        const respuesta = opcionBtn.dataset.respuesta;
-        const pregunta = observar.preguntas.find((p) => p.id === preguntaId);
-        if (!pregunta) return;
-        const item = opcionBtn.closest('.observar-item');
-        item.querySelectorAll('.observar-opcion').forEach((b) => {
-          b.classList.toggle('selected', b === opcionBtn);
-          b.disabled = true;
-        });
-        await guardarRespuestaRapida(id, pregunta, respuesta);
-        showToast('Observación guardada');
-        const oferta = construirOferta(pregunta, respuesta);
-        if (oferta) {
-          // Si hay una oferta (acción o recordatorio sugerido), esperamos su
-          // confirmación antes de refrescar la ficha, para que la persona
-          // pueda verla y decidir sin que la pantalla se mueva debajo suyo.
-          mostrarOfertaEnItem(item, oferta, id, () => renderDetalle(id, root), resumenSiembra);
-        } else {
-          item.classList.add('resuelto');
-          // Refresca la ficha para que la respuesta quede visible en el
-          // historial al toque, igual que el resto de las acciones rápidas
-          // de esta vista (completar recordatorio, eliminar evento, etc.).
-          setTimeout(() => renderDetalle(id, root), 260);
-        }
-        return;
-      }
-      if (e.target.closest('#btn-revision-completa')) {
-        abrirRevisionCompleta(id, cultivo, eventos, config, () => renderDetalle(id, root));
-      }
-    });
+  // Recibir una sugerencia: motor local, sin IA — botón voluntario, nunca
+  // protagonista de la pantalla. Un toque = una pregunta = una interacción
+  // completa (ver pintarSugerenciaObservacion más abajo). "Registrar lo
+  // que veo" refresca la ficha al guardar, para que la observación quede
+  // en el Historial; "Otra sugerencia" nunca se encadena sola.
+  const sugerenciaWrap = root.querySelector('#sugerencia-observacion');
+  if (sugerenciaWrap) {
+    pintarSugerenciaObservacion(sugerenciaWrap, cultivo, eventos, config, () => renderDetalle(id, root));
   }
 
   // Fotos: minibiblioteca visual del cultivo (primeras 6, sin duplicar nada)
@@ -339,10 +300,12 @@ async function renderTimelineItem(ev, fotos, anotacionesSiembra, resumenSiembra)
         ${lineaSiembra ? `<div class="timeline-siembra">${escapeHtml(lineaSiembra)}</div>` : ''}
         ${lineaCosecha ? `<div class="timeline-siembra">${escapeHtml(lineaCosecha)}</div>` : ''}
         ${motivoFinTxt ? `<div class="timeline-siembra">${escapeHtml(motivoFinTxt)}</div>` : ''}
-        ${ev.respuestas && ev.respuestas.length ? `
+        ${ev.preguntaContexto
+          ? `<div class="timeline-pregunta-contexto">🌱 <em>${escapeHtml(ev.preguntaContexto)}</em></div>`
+          : (ev.respuestas && ev.respuestas.length ? `
         <div class="timeline-respuestas">
           ${ev.respuestas.map((r) => `<div class="timeline-respuesta"><strong>${escapeHtml(r.etiqueta)}:</strong> ${escapeHtml(r.respuesta)}</div>`).join('')}
-        </div>` : ''}
+        </div>` : '')}
         ${ev.nota ? `<div class="timeline-nota">${escapeHtml(ev.nota)}</div>` : ''}
         ${fotoUrl ? `<button type="button" class="timeline-foto" data-foto-index="${fotoIndex}" aria-label="Ver foto grande"><img src="${fotoUrl}" alt="Foto del evento" /></button>` : ''}
         <button class="timeline-delete" data-id="${ev.id}">Eliminar</button>
@@ -1056,253 +1019,80 @@ function abrirSugerenciaRecordatorioStandalone(cultivoId, sugerencia, onDone) {
 }
 
 // ---------------------------------------------------------------------
-// Qué observar ahora / Revisión guiada — capa de presentación del motor
-// de observación (motor-observacion.js). Esta sección no contiene ninguna
-// lógica agronómica: solo pinta lo que el motor decide y guarda las
-// respuestas. Ninguna acción o recordatorio se crea sin confirmación
-// explícita del usuario (principio central: enseñar a observar, no
-// diagnosticar).
+// Recibir una sugerencia — capa de presentación del motor de observación
+// (motor-observacion.js#obtenerSugerenciaCultivo). A propósito NO es un
+// cuestionario ni una sesión guiada: cada toque es una interacción
+// completa y separada — un botón, una pregunta, listo. Nunca se encadena
+// automáticamente a una siguiente pregunta (ni siquiera después de
+// guardar una observación), y nunca se muestra "Pregunta 1 de N". Esta
+// sección no contiene ninguna lógica agronómica propia: solo pinta lo que
+// el motor decide.
 // ---------------------------------------------------------------------
 
-function renderObservarAhoraHtml(preguntas) {
-  if (!preguntas.length) {
-    return `
-      <div class="observar-vacio">
-        <p>No hay preguntas sugeridas por ahora.</p>
-        <button type="button" id="btn-revision-completa" class="link-ver-todas">👁 Revisar cultivo</button>
-      </div>
+// wrap: contenedor de la sección. onDone: se llama cuando conviene
+// refrescar la ficha completa (después de guardar una observación, para
+// que quede reflejada en Historial).
+function pintarSugerenciaObservacion(wrap, cultivo, eventos, config, onDone) {
+  function pintarBoton() {
+    wrap.innerHTML = `
+      <button type="button" id="btn-recibir-sugerencia" class="link-ver-todas">🌱 Recibir una sugerencia</button>
     `;
+    wrap.querySelector('#btn-recibir-sugerencia').addEventListener('click', () => mostrarSugerencia([]));
   }
-  return `
-    <div class="observar-lista">
-      ${preguntas.map((p) => `
-        <div class="observar-item" data-pregunta-id="${p.id}">
-          <div class="observar-pregunta">${escapeHtml(p.texto)}</div>
-          <div class="observar-opciones">
-            ${p.opciones.map((op) => `<button type="button" class="observar-opcion" data-pregunta-id="${p.id}" data-respuesta="${escapeHtml(op)}">${escapeHtml(op)}</button>`).join('')}
-          </div>
-          ${p.pista ? `<div class="observar-pista">${escapeHtml(p.pista)}</div>` : ''}
-        </div>
-      `).join('')}
-    </div>
-    <button type="button" id="btn-revision-completa" class="link-ver-todas">👁 Hacer revisión completa →</button>
-  `;
-}
 
-// Guarda una respuesta rápida agrupándola en el evento de revisión del día
-// (si ya existe uno para hoy) en vez de crear un evento por cada respuesta.
-async function guardarRespuestaRapida(cultivoId, pregunta, respuesta, fecha) {
-  const hoy = fecha || todayIsoDate();
-  const eventos = await DB.getEventosByCultivo(cultivoId);
-  const revisionHoy = eventos.find((e) => e.tipo === 'revision' && e.fecha === hoy);
-  const entrada = { preguntaId: pregunta.id, etiqueta: pregunta.etiqueta || pregunta.texto, respuesta };
-  if (revisionHoy) {
-    const respuestas = (revisionHoy.respuestas || []).filter((r) => r.preguntaId !== pregunta.id);
-    respuestas.push(entrada);
-    await DB.updateEvento(revisionHoy.id, { respuestas });
-  } else {
-    await DB.addEvento({ cultivoId, tipo: 'revision', fecha: hoy, respuestas: [entrada] });
-  }
-}
-
-// Si la respuesta dada coincide con la que dispara una acción o un
-// recordatorio sugerido para esa pregunta, arma el objeto de oferta.
-// Nunca se ejecuta nada acá — solo se describe qué se podría ofrecer.
-function construirOferta(pregunta, respuesta) {
-  if (pregunta.accion && pregunta.accion.respuesta === respuesta) {
-    return { tipo: 'accion', eventoTipo: pregunta.accion.eventoTipo, label: pregunta.accion.label };
-  }
-  if (pregunta.recordatorio && pregunta.recordatorio.respuesta === respuesta) {
-    return { tipo: 'recordatorio', dias: pregunta.recordatorio.dias, titulo: pregunta.recordatorio.titulo };
-  }
-  return null;
-}
-
-// Muestra la oferta (registrar evento / crear recordatorio) debajo de la
-// pregunta respondida, con confirmación explícita Sí/No. onDone se llama
-// tanto si se confirma como si se descarta, para refrescar la ficha recién
-// ahí (así la persona alcanza a ver y decidir la oferta antes de que la
-// pantalla se actualice).
-// Si el cultivo tiene seguimiento cuantitativo activo y la oferta es de
-// germinación o trasplante, en vez de crear un evento vacío abrimos el
-// modal de cantidad correspondiente — así "¿Ya germinó?" -> "Sí" no
-// registra un evento sin datos cuando ya se está llevando la cuenta.
-// Devuelve true si intercepta la oferta (el llamador no debe hacer nada más).
-function intentarAbrirCantidadPorOferta(oferta, cultivoId, resumen, onDone) {
-  if (!resumen || !resumen.activo || oferta.tipo !== 'accion') return false;
-  if (oferta.eventoTipo === 'germinacion' && !resumen.sinGerminacion && resumen.germinadas < resumen.sembradas) {
-    abrirModalGerminacion(cultivoId, resumen, onDone);
-    return true;
-  }
-  if (oferta.eventoTipo === 'trasplante' && resumen.enOrigen > 0) {
-    abrirModalTrasplante(cultivoId, resumen, onDone);
-    return true;
-  }
-  return false;
-}
-
-function mostrarOfertaEnItem(item, oferta, cultivoId, onDone, resumenSiembra) {
-  const div = document.createElement('div');
-  div.className = 'observar-oferta';
-  const label = oferta.tipo === 'accion' ? oferta.label : `Recordarme en ${oferta.dias} días: ${oferta.titulo}`;
-  div.innerHTML = `
-    <span>${escapeHtml(label)}</span>
-    <div class="observar-oferta-botones">
-      <button type="button" class="pill-btn oferta-confirmar">Sí</button>
-      <button type="button" class="pill-btn oferta-descartar">No</button>
-    </div>
-  `;
-  item.appendChild(div);
-  div.querySelector('.oferta-confirmar').addEventListener('click', async () => {
-    if (intentarAbrirCantidadPorOferta(oferta, cultivoId, resumenSiembra, onDone)) {
-      div.remove();
-      item.classList.add('resuelto');
+  // excluirIds: ids a evitar en ESTE pedido puntual (se usa desde "Otra
+  // sugerencia", para no repetir la que se acaba de mostrar). La memoria
+  // entre visitas (cultivo.sugerenciasRecientes) la aplica el motor por su
+  // cuenta — acá solo la persistimos cuando se muestra algo nuevo.
+  async function mostrarSugerencia(excluirIds) {
+    const sugerencia = obtenerSugerenciaCultivo(cultivo, eventos, new Date(), config.hemisferio, { excluirIds });
+    if (!sugerencia) {
+      pintarVacio();
       return;
     }
-    if (oferta.tipo === 'accion') {
-      await DB.addEvento({ cultivoId, tipo: oferta.eventoTipo, fecha: todayIsoDate() });
-      showToast('Evento registrado');
-    } else {
-      await DB.addRecordatorio({ cultivoId, titulo: oferta.titulo, fecha: sumarDiasFecha(todayIsoDate(), oferta.dias), estado: 'pendiente' });
-      showToast('Recordatorio creado');
-    }
-    div.remove();
-    item.classList.add('resuelto');
-    if (onDone) setTimeout(onDone, 500);
-  });
-  div.querySelector('.oferta-descartar').addEventListener('click', () => {
-    div.remove();
-    item.classList.add('resuelto');
-    if (onDone) setTimeout(onDone, 260);
-  });
-}
 
-// Sesión guiada paso a paso ("1 de N"): recorre un pool más amplio de
-// preguntas, permite Omitir en cada paso, y al final agrupa todas las
-// respuestas de la sesión en UN solo evento de revisión (mismo criterio
-// de agrupamiento por día que las respuestas rápidas de la ficha).
-function abrirRevisionCompleta(cultivoId, cultivo, eventos, config, onSaved) {
-  const { preguntas } = obtenerPreguntasActuales(cultivo, eventos, new Date(), config.hemisferio, 8);
-  if (!preguntas.length) {
-    showToast('No hay más preguntas sugeridas por ahora');
-    return;
-  }
+    // Guardamos un rastro corto (hasta 6 ids) para que la próxima vez que
+    // se pida una sugerencia — hoy o en otra visita — el motor evite
+    // repetir lo último mostrado (punto 8 y 25 del pedido: sin subsistema
+    // nuevo, un campo más sobre el registro de cultivo que ya existía).
+    const recientes = [sugerencia.idPregunta, ...(Array.isArray(cultivo.sugerenciasRecientes) ? cultivo.sugerenciasRecientes : [])].slice(0, 6);
+    cultivo.sugerenciasRecientes = recientes;
+    await DB.updateCultivo(cultivo.id, { sugerenciasRecientes: recientes });
 
-  let idx = 0;
-  const respuestas = [];
-  const ofertas = [];
-
-  const { backdrop, close } = createModal(`
-    <div class="modal-sheet">
-      <div class="modal-close-row"><button id="modal-close">✕</button></div>
-      <div id="revision-contenido"></div>
-    </div>
-  `, 'revision-modal');
-
-  backdrop.querySelector('#modal-close').addEventListener('click', close);
-  const contenido = backdrop.querySelector('#revision-contenido');
-
-  function pintarPregunta() {
-    const p = preguntas[idx];
-    contenido.innerHTML = `
-      <div class="revision-progreso">${idx + 1} de ${preguntas.length}</div>
-      <div class="revision-pregunta">${escapeHtml(p.texto)}</div>
-      <div class="observar-opciones revision-opciones">
-        ${p.opciones.map((op) => `<button type="button" class="observar-opcion" data-respuesta="${escapeHtml(op)}">${escapeHtml(op)}</button>`).join('')}
+    wrap.innerHTML = `
+      <div class="sugerencia-card">
+        <div class="sugerencia-titulo">Una cosa que podrías mirar 👀</div>
+        <div class="sugerencia-pregunta">${escapeHtml(sugerencia.pregunta)}</div>
+        <div class="sugerencia-botones">
+          <button type="button" id="btn-registrar-sugerencia" class="btn-primary">Registrar lo que veo</button>
+          <button type="button" id="btn-otra-sugerencia" class="link-ver-todas">Otra sugerencia</button>
+        </div>
       </div>
-      ${p.pista ? `<div class="observar-pista">${escapeHtml(p.pista)}</div>` : ''}
-      <button type="button" id="revision-omitir" class="link-ver-todas">Omitir</button>
     `;
-    contenido.querySelectorAll('.observar-opcion').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const respuesta = btn.dataset.respuesta;
-        respuestas.push({ preguntaId: p.id, etiqueta: p.etiqueta || p.texto, respuesta });
-        const oferta = construirOferta(p, respuesta);
-        if (oferta) ofertas.push({ ...oferta, preguntaTexto: p.texto });
-        avanzar();
-      });
+    wrap.querySelector('#btn-registrar-sugerencia').addEventListener('click', () => {
+      openEventoModal(cultivo.id, () => { if (onDone) onDone(); }, { pregunta: sugerencia });
     });
-    contenido.querySelector('#revision-omitir').addEventListener('click', avanzar);
-  }
-
-  function avanzar() {
-    idx++;
-    if (idx < preguntas.length) pintarPregunta();
-    else pintarResumen();
-  }
-
-  function pintarResumen() {
-    contenido.innerHTML = `
-      <div class="revision-resumen-titulo">Revisión completada 🌱</div>
-      ${respuestas.length ? `
-        <div class="revision-resumen-lista">
-          ${respuestas.map((r) => `<div class="revision-resumen-item"><strong>${escapeHtml(r.etiqueta)}:</strong> ${escapeHtml(r.respuesta)}</div>`).join('')}
-        </div>
-      ` : `<p class="revision-resumen-vacio">No se registraron respuestas.</p>`}
-      ${ofertas.length ? `
-        <div class="revision-ofertas" id="revision-ofertas">
-          ${ofertas.map((o, i) => `
-            <div class="observar-oferta" data-oferta-index="${i}">
-              <span>${o.tipo === 'accion' ? escapeHtml(o.label) : `Recordarme en ${o.dias} días: ${escapeHtml(o.titulo)}`}</span>
-              <div class="observar-oferta-botones">
-                <button type="button" class="pill-btn oferta-confirmar" data-oferta-index="${i}">Sí</button>
-                <button type="button" class="pill-btn oferta-descartar" data-oferta-index="${i}">No</button>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-      <div class="form-group">
-        <label class="form-label">Nota <span class="optional">(opcional)</span></label>
-        <textarea id="revision-nota" class="form-textarea" placeholder="Algo más que quieras anotar..."></textarea>
-      </div>
-      <button type="button" id="revision-guardar" class="btn-primary">Guardar revisión</button>
-    `;
-
-    const ofertasWrap = contenido.querySelector('#revision-ofertas');
-    if (ofertasWrap) {
-      ofertasWrap.addEventListener('click', async (e) => {
-        const confirmar = e.target.closest('.oferta-confirmar');
-        const descartar = e.target.closest('.oferta-descartar');
-        const btn = confirmar || descartar;
-        if (!btn) return;
-        const i = Number(btn.dataset.ofertaIndex);
-        const oferta = ofertas[i];
-        if (confirmar) {
-          if (oferta.tipo === 'accion') {
-            await DB.addEvento({ cultivoId, tipo: oferta.eventoTipo, fecha: todayIsoDate() });
-            showToast('Evento registrado');
-          } else {
-            await DB.addRecordatorio({ cultivoId, titulo: oferta.titulo, fecha: sumarDiasFecha(todayIsoDate(), oferta.dias), estado: 'pendiente' });
-            showToast('Recordatorio creado');
-          }
-        }
-        btn.closest('.observar-oferta').remove();
-      });
-    }
-
-    contenido.querySelector('#revision-guardar').addEventListener('click', async () => {
-      const nota = contenido.querySelector('#revision-nota').value.trim();
-      const hoy = todayIsoDate();
-      const eventosCultivo = await DB.getEventosByCultivo(cultivoId);
-      const revisionHoy = eventosCultivo.find((e) => e.tipo === 'revision' && e.fecha === hoy);
-      if (revisionHoy) {
-        const previas = (revisionHoy.respuestas || []).filter((r) => !respuestas.some((n) => n.preguntaId === r.preguntaId));
-        const merged = [...previas, ...respuestas];
-        await DB.updateEvento(revisionHoy.id, {
-          respuestas: merged,
-          nota: nota ? (revisionHoy.nota ? `${revisionHoy.nota}\n${nota}` : nota) : revisionHoy.nota,
-        });
-      } else {
-        await DB.addEvento({ cultivoId, tipo: 'revision', fecha: hoy, respuestas, nota: nota || null });
-      }
-      close();
-      showToast('Revisión guardada');
-      onSaved();
+    wrap.querySelector('#btn-otra-sugerencia').addEventListener('click', () => {
+      // Nunca auto-encadenada: es un toque explícito más, igual que el
+      // primero. Evitamos repetir la que se acaba de mostrar sumándola a
+      // la exclusión de este pedido puntual.
+      mostrarSugerencia([sugerencia.idPregunta, ...excluirIds]);
     });
   }
 
-  pintarPregunta();
+  function pintarVacio() {
+    wrap.innerHTML = `
+      <div class="sugerencia-vacio">
+        <p>Por ahora no tengo una sugerencia específica para este momento. Podés registrar libremente cualquier cambio que notes.</p>
+        <button type="button" id="btn-registrar-libre" class="link-ver-todas">Registrar observación</button>
+      </div>
+    `;
+    wrap.querySelector('#btn-registrar-libre').addEventListener('click', () => {
+      openEventoModal(cultivo.id, () => { if (onDone) onDone(); });
+    });
+  }
+
+  pintarBoton();
 }
 
 // Vista completa: todas las fotos del cultivo en una cuadrícula.
@@ -1369,7 +1159,16 @@ function parseValorCosechaInput(str) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-function openEventoModal(cultivoId, onSaved) {
+// cultivoId, onSaved, opts.pregunta — cuando viene de "Recibir una
+// sugerencia" (ver pintarSugerenciaObservacion), opts.pregunta es
+// { idPregunta, pregunta, categoria, etapa, origen } (motor-observacion.js).
+// En ese caso el modal se simplifica: sin selector de tipo (queda fijo en
+// 'observacion'), con la pregunta visible como contexto, y el evento
+// guardado queda etiquetado para que el motor sepa que esa pregunta ya
+// tuvo una respuesta real (mismo mecanismo de cooldown/historial que ya
+// existía, reutilizado — ver el comentario en el guardado más abajo).
+function openEventoModal(cultivoId, onSaved, opts) {
+  const pregunta = (opts && opts.pregunta) || null;
   let fotoBlob = null;
   let tipoSeleccionado = 'observacion';
   let cosechaInicializada = false;
@@ -1377,13 +1176,20 @@ function openEventoModal(cultivoId, onSaved) {
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
       <div class="modal-close-row"><button id="modal-close">✕</button></div>
-      <h2>Agregar evento</h2>
+      <h2>${pregunta ? 'Registrar lo que veo' : 'Agregar evento'}</h2>
+      ${pregunta ? `
+      <div class="sugerencia-contexto">
+        <div class="sugerencia-contexto-label">Pregunta que originó la observación</div>
+        <div class="sugerencia-contexto-texto">${escapeHtml(pregunta.pregunta)}</div>
+      </div>
+      ` : `
       <div class="form-group">
         <label class="form-label">Tipo</label>
         <div class="chip-group" id="ev-tipo">
           ${EVENTO_TIPOS.filter((t) => t.value !== 'finalizacion' && t.value !== 'reactivacion').map((t) => `<div class="chip-option ${t.value === tipoSeleccionado ? 'selected' : ''}" data-value="${t.value}">${t.icon} ${t.label}</div>`).join('')}
         </div>
       </div>
+      `}
 
       <div class="form-group hidden" id="ev-cosecha-section">
         <label class="form-label">¿Cuánto cosechaste? <span class="optional">(opcional)</span></label>
@@ -1400,8 +1206,8 @@ function openEventoModal(cultivoId, onSaved) {
         <input type="date" id="ev-fecha" class="form-input" value="${todayIsoDate()}" />
       </div>
       <div class="form-group">
-        <label class="form-label">Nota <span class="optional">(opcional)</span></label>
-        <textarea id="ev-nota" class="form-textarea" placeholder="Detalles..."></textarea>
+        <label class="form-label">${pregunta ? '¿Qué estás viendo?' : 'Nota'} <span class="optional">(opcional)</span></label>
+        <textarea id="ev-nota" class="form-textarea" placeholder="${pregunta ? 'Contá lo que notaste — no hace falta responder la pregunta exacta, cualquier cosa que veas sirve.' : 'Detalles...'}"></textarea>
       </div>
       <div class="form-group">
         <label class="form-label">Foto <span class="optional">(opcional)</span></label>
@@ -1414,7 +1220,7 @@ function openEventoModal(cultivoId, onSaved) {
           <input type="file" id="ev-foto" accept="image/*" capture="environment" hidden />
         </div>
       </div>
-      <button id="ev-guardar" class="btn-primary">Guardar evento</button>
+      <button id="ev-guardar" class="btn-primary">${pregunta ? 'Registrar lo que veo' : 'Guardar evento'}</button>
     </div>
   `);
 
@@ -1480,16 +1286,22 @@ function openEventoModal(cultivoId, onSaved) {
     }
   }
 
+  // Cuando viene de una sugerencia (opts.pregunta) el chip-group #ev-tipo
+  // ni siquiera se renderiza (ver template arriba) — el tipo queda fijo en
+  // 'observacion' (o pasa a 'fotografia' automáticamente al agregar una
+  // foto, más abajo), así que acá no hay nada que conectar.
   const tipoGroup = backdrop.querySelector('#ev-tipo');
-  tipoGroup.addEventListener('click', (e) => {
-    const chip = e.target.closest('.chip-option');
-    if (!chip) return;
-    tipoGroup.querySelectorAll('.chip-option').forEach((c) => c.classList.remove('selected'));
-    chip.classList.add('selected');
-    tipoSeleccionado = chip.dataset.value;
-    cosechaSection.classList.toggle('hidden', tipoSeleccionado !== 'cosecha');
-    if (tipoSeleccionado === 'cosecha') inicializarCosechaSection();
-  });
+  if (tipoGroup) {
+    tipoGroup.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip-option');
+      if (!chip) return;
+      tipoGroup.querySelectorAll('.chip-option').forEach((c) => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      tipoSeleccionado = chip.dataset.value;
+      cosechaSection.classList.toggle('hidden', tipoSeleccionado !== 'cosecha');
+      if (tipoSeleccionado === 'cosecha') inicializarCosechaSection();
+    });
+  }
 
   const photoPicker = backdrop.querySelector('#ev-photo-picker');
   const fotoInput = backdrop.querySelector('#ev-foto');
@@ -1521,7 +1333,7 @@ function openEventoModal(cultivoId, onSaved) {
     photoRemoveBtn.classList.remove('hidden');
     if (tipoSeleccionado === 'observacion') {
       tipoSeleccionado = 'fotografia';
-      tipoGroup.querySelectorAll('.chip-option').forEach((c) => c.classList.toggle('selected', c.dataset.value === 'fotografia'));
+      if (tipoGroup) tipoGroup.querySelectorAll('.chip-option').forEach((c) => c.classList.toggle('selected', c.dataset.value === 'fotografia'));
     }
   });
 
@@ -1552,6 +1364,22 @@ function openEventoModal(cultivoId, onSaved) {
       nota: nota || null,
       fotoId,
     };
+
+    // Si esto vino de "Recibir una sugerencia", dejamos guardada la
+    // pregunta que la originó (para que el historial se siga leyendo bien,
+    // punto 14) y una respuesta sintética con valor 'Registrado' — no
+    // reproduce ninguna opción real del banco de preguntas (que suelen ser
+    // 'Sí'/'No'/etc.), así que nunca dispara resuelvePermanente por
+    // accidente, pero sí arranca el cooldown normal porque
+    // extraerRespuestasPrevias() (motor-observacion.js) lee
+    // evento.respuestas sin filtrar por tipo de evento. Es decir: reusamos
+    // el mecanismo de memoria que ya existía, sin tocarlo.
+    if (pregunta) {
+      eventoNuevo.preguntaContexto = pregunta.pregunta;
+      eventoNuevo.respuestas = [
+        { preguntaId: pregunta.idPregunta, etiqueta: pregunta.categoria || pregunta.pregunta, respuesta: 'Registrado' },
+      ];
+    }
 
     // Cosecha: la cantidad es 100% opcional (punto 3 del pedido) — una
     // fila sin número cargado no genera medición, y una cosecha sin
@@ -1586,7 +1414,7 @@ function openEventoModal(cultivoId, onSaved) {
       });
     } else {
       close();
-      showToast('Evento agregado');
+      showToast(pregunta ? 'Observación guardada' : 'Evento agregado');
       onSaved();
     }
   });

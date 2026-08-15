@@ -64,25 +64,126 @@ function extraerRespuestasPrevias(eventos) {
   return mapa;
 }
 
-// obtenerPreguntasActuales(cultivo, eventos, fechaActual, hemisferio, limite)
+// obtenerSugerenciaCultivo(cultivo, eventos, fechaActual, hemisferio, opts)
+//
+// Reemplaza a la vieja obtenerPreguntasActuales (que devolvía un lote de
+// preguntas para armar una "sesión" de revisión). Esta versión devuelve
+// UNA sola sugerencia — o null si no hay ninguna pertinente ahora mismo —
+// porque la interfaz dejó de mostrar cuestionarios (ver
+// views/detalle.js#pintarSugerenciaObservacion): la persona pide una
+// sugerencia, recibe una pregunta, y ahí termina la interacción.
 //
 // hemisferio queda reservado para futuras preguntas con matiz estacional —
-// no se usa todavía para filtrar nada en esta primera versión.
-function obtenerPreguntasActuales(cultivo, eventos, fechaActual, hemisferio, limite = 4) {
+// no se usa todavía para filtrar nada en esta primera versión (igual que
+// en la función que reemplaza).
+//
+// opts.excluirIds: ids de pregunta a evitar SOLO en este llamado puntual
+// (lo usa "Otra sugerencia" para no repetir la que se acaba de mostrar en
+// esta misma visita). Se combina con cultivo.sugerenciasRecientes — la
+// memoria corta y persistida entre visitas (punto 8 del pedido: variar en
+// vez de repetir la misma pregunta apenas se vuelve a entrar) — sin crear
+// ningún subsistema de tracking nuevo: es un campo más sobre el mismo
+// registro de `cultivos` que ya existía (ver DB_VERSION, sin cambios).
+//
+// Fuentes candidatas, de mayor a menor prioridad (punto 10 del pedido —
+// especie > etapa/eventos reales [ya aplicado al elegir `etapa` vía
+// estimarEtapa] > historial/cooldown > variedad reciente > contexto
+// disponible):
+//   a) PREGUNTAS_CULTIVOS.especies[id][etapa]     — origen 'especie'
+//      (banco interactivo curado, ~28 especies, con opciones/cooldown/
+//      resuelvePermanente propios)
+//   b) Biblioteca: especie.etapas[etapa].observar — origen 'biblioteca-etapa'
+//      (~102 especies, texto narrativo). Si la etapa horticultura estándar
+//      que estimamos no existe para esta especie —caso de servicio/
+//      agroforestales, que en la Biblioteca usan otro set de etapas
+//      (establecimiento/crecimiento/acumulacion_biomasa/poda/rebrote, ver
+//      comentario en estimarEtapa)— en vez de no ofrecer nada se cae a la
+//      unión de TODAS las etapas de esa especie.
+//   c) Biblioteca: ecologia.interaccionesAObservar — origen
+//      'biblioteca-ecologia' (dimensión sistema: competencia, sombra,
+//      espacio, plantas vecinas)
+//   d) Biblioteca: cosecha.indicadoresMadurez, solo con etapa==='produccion'
+//      — origen 'biblioteca-cosecha' (dimensión maduración/cosecha)
+//   e) PREGUNTAS_CULTIVOS.generales.*             — origen 'general'
+//      (siempre disponible; red de contención para que ninguna especie se
+//      quede totalmente sin sugerencia posible)
+function obtenerSugerenciaCultivo(cultivo, eventos, fechaActual, hemisferio, opts) {
+  opts = opts || {};
   const especieId = identificarEspecie(cultivo.especie);
   const etapa = estimarEtapa(cultivo, eventos, especieId, fechaActual);
   const historial = extraerRespuestasPrevias(eventos);
+  const especieBiblioteca = typeof buscarEspecieBibliotecaPorNombre === 'function'
+    ? buscarEspecieBibliotecaPorNombre(cultivo.especie)
+    : null;
 
   const pool = [];
+
+  // a) especie (banco interactivo)
   if (especieId && PREGUNTAS_CULTIVOS.especies[especieId]) {
     const deEtapa = PREGUNTAS_CULTIVOS.especies[especieId][etapa] || [];
-    deEtapa.forEach((p) => pool.push({ ...p, origen: 'especie' }));
+    deEtapa.forEach((p) => pool.push({ ...p, texto: p.texto, origen: 'especie' }));
   }
+
+  // b) Biblioteca — qué observar de la etapa (con fallback a todas las
+  // etapas cuando la especie usa un set de etapas no-estándar).
+  if (especieBiblioteca && especieBiblioteca.etapas) {
+    const etapas = especieBiblioteca.etapas;
+    const clavesEtapas = Object.keys(etapas).filter((k) => k !== 'tipo');
+    const bloqueEtapa = etapas[etapa];
+    const entradas = (bloqueEtapa && Array.isArray(bloqueEtapa.observar) && bloqueEtapa.observar.length)
+      ? bloqueEtapa.observar.map((texto) => ({ texto, etapaOrigen: etapa }))
+      : clavesEtapas.reduce((acc, k) => {
+          const arr = etapas[k] && Array.isArray(etapas[k].observar) ? etapas[k].observar : [];
+          arr.forEach((texto) => acc.push({ texto, etapaOrigen: k }));
+          return acc;
+        }, []);
+    entradas.forEach((e, i) => {
+      pool.push({
+        id: `bib-etapa-${especieBiblioteca.id}-${e.etapaOrigen}-${i}`,
+        texto: e.texto,
+        etiqueta: 'Qué observar',
+        origen: 'biblioteca-etapa',
+      });
+    });
+  }
+
+  // c) Biblioteca — relación con el sistema (dimensión "Sistema" del
+  // pedido: competencia, espacio disponible, plantas vecinas)
+  if (especieBiblioteca && especieBiblioteca.ecologia && Array.isArray(especieBiblioteca.ecologia.interaccionesAObservar)) {
+    especieBiblioteca.ecologia.interaccionesAObservar.forEach((texto, i) => {
+      pool.push({
+        id: `bib-eco-${especieBiblioteca.id}-${i}`,
+        texto,
+        etiqueta: 'Relación con el sistema',
+        origen: 'biblioteca-ecologia',
+      });
+    });
+  }
+
+  // d) Biblioteca — señales de cosecha, solo si ya estamos en producción
+  if (etapa === 'produccion' && especieBiblioteca && especieBiblioteca.cosecha && Array.isArray(especieBiblioteca.cosecha.indicadoresMadurez)) {
+    especieBiblioteca.cosecha.indicadoresMadurez.forEach((texto, i) => {
+      pool.push({
+        id: `bib-cosecha-${especieBiblioteca.id}-${i}`,
+        texto,
+        etiqueta: 'Señales de cosecha',
+        origen: 'biblioteca-cosecha',
+      });
+    });
+  }
+
+  // e) generales — siempre disponibles, prioridad más baja
   Object.entries(PREGUNTAS_CULTIVOS.generales).forEach(([categoria, lista]) => {
-    lista.forEach((p) => pool.push({ ...p, categoria: p.categoria || categoria, origen: 'general' }));
+    lista.forEach((p) => pool.push({ ...p, texto: p.texto, categoria: p.categoria || categoria, origen: 'general' }));
   });
 
+  const excluir = new Set([
+    ...(opts.excluirIds || []),
+    ...(Array.isArray(cultivo.sugerenciasRecientes) ? cultivo.sugerenciasRecientes : []),
+  ]);
+
   const candidatas = pool.filter((p) => {
+    if (excluir.has(p.id)) return false;
     const previa = historial.get(p.id);
     if (!previa) return true;
     if (p.resuelvePermanente && p.resuelvePermanente.includes(previa.respuesta)) return false;
@@ -91,17 +192,28 @@ function obtenerPreguntasActuales(cultivo, eventos, fechaActual, hemisferio, lim
     return dias >= cooldown;
   });
 
-  // Prioridad: preguntas específicas de la especie primero, y dentro de
-  // cada grupo, las que nunca se respondieron antes de las que ya volvieron
-  // por vencimiento del cooldown.
-  candidatas.sort((a, b) => {
-    if ((a.origen === 'especie') !== (b.origen === 'especie')) return a.origen === 'especie' ? -1 : 1;
-    const aPrevia = historial.has(a.id) ? 1 : 0;
-    const bPrevia = historial.has(b.id) ? 1 : 0;
-    return aPrevia - bPrevia;
-  });
+  if (!candidatas.length) return null;
 
-  return { etapa, especieId, preguntas: candidatas.slice(0, limite) };
+  // Dentro de las candidatas, nos quedamos con las del origen de mayor
+  // prioridad presente, y elegimos al azar entre esas — así, si hay varias
+  // preguntas de "especie" disponibles, no siempre sale la primera del
+  // arreglo (punto 11: variedad).
+  const ORDEN_ORIGEN = ['especie', 'biblioteca-etapa', 'biblioteca-ecologia', 'biblioteca-cosecha', 'general'];
+  let mejorIdx = ORDEN_ORIGEN.length;
+  candidatas.forEach((c) => {
+    const idx = ORDEN_ORIGEN.indexOf(c.origen);
+    if (idx >= 0 && idx < mejorIdx) mejorIdx = idx;
+  });
+  const top = candidatas.filter((c) => ORDEN_ORIGEN.indexOf(c.origen) === mejorIdx);
+  const elegida = top[Math.floor(Math.random() * top.length)];
+
+  return {
+    idPregunta: elegida.id,
+    pregunta: elegida.texto,
+    categoria: elegida.etiqueta || elegida.categoria || null,
+    etapa,
+    origen: elegida.origen,
+  };
 }
 
 // ---------------------------------------------------------------------
