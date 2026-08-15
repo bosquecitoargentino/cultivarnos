@@ -11,7 +11,7 @@
 // (ej. la pantalla de Configuración) NO tiene su propia copia del número:
 // lo consulta en tiempo de ejecución mandándole un mensaje a este Service
 // Worker (ver utils.js#obtenerVersionApp). Una sola fuente de verdad real.
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 
 const CACHE_NAME = `cultivarnos-v${APP_VERSION}`;
 const APP_SHELL = [
@@ -29,6 +29,10 @@ const APP_SHELL = [
   './js/data/preguntas-cultivos.js',
   './js/motor-observacion.js',
   './js/motor-siembra.js',
+  './js/motor-cosecha.js',
+  './js/motor-espacios.js',
+  './js/motor-resumen.js',
+  './js/motor-tarjeta.js',
   './js/views/inicio.js',
   './js/views/cultivos.js',
   './js/views/nuevo.js',
@@ -37,6 +41,8 @@ const APP_SHELL = [
   './js/views/calendario.js',
   './js/views/biblioteca.js',
   './js/views/ficha-especie.js',
+  './js/views/espacios.js',
+  './js/views/compartir.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   // Imágenes predeterminadas por especie (assets locales, livianas — ver

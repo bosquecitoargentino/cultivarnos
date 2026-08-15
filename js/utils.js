@@ -17,6 +17,8 @@ const EVENTO_TIPOS = [
   { value: 'poda', label: 'Poda', icon: '✂️' },
   { value: 'floracion', label: 'Floración', icon: '🌸' },
   { value: 'cosecha', label: 'Cosecha', icon: '🧺' },
+  { value: 'finalizacion', label: 'Cierre de ciclo', icon: '🏁' },
+  { value: 'reactivacion', label: 'Reactivación', icon: '↩️' },
   { value: 'otro', label: 'Otro', icon: '📝' },
 ];
 
@@ -187,12 +189,18 @@ const fotoUrlCache = objectUrlCache();
 //      `eventos`, que ya viene ordenado de más nuevo a más viejo por
 //      DB.getEventosByCultivo) — nunca se reemplaza una foto real
 //   2) si no hay ninguna foto propia, la imagen predeterminada de la
-//      especie (biblioteca CULTIVOS_DATA -> campo `imagen`), resuelta a
-//      partir de cultivo.especie con el mismo matcher que ya usa el
-//      motor de observación (identificarEspecie) — nada de esto se
-//      guarda en IndexedDB ni en el cultivo, se calcula al vuelo
-//   3) si la especie no es reconocida, null — la vista cae a su ícono
-//      de reemplazo actual (emoji), exactamente como hasta ahora
+//      especie (biblioteca CULTIVOS_DATA -> campo `imagen`, las ~28
+//      especies piloto originales), resuelta a partir de cultivo.especie
+//      con el mismo matcher que ya usa el motor de observación
+//      (identificarEspecie) — nada de esto se guarda en IndexedDB ni en
+//      el cultivo, se calcula al vuelo
+//   3) si tampoco está ahí, la Biblioteca ampliada (~102 especies,
+//      buscarEspecieBibliotecaPorNombre) -> campo visual.imagen — mismo
+//      matcher por nombre/alias que ya usa la ficha de detalle para
+//      linkear a la Biblioteca, reutilizado acá en vez de duplicarlo
+//   4) si la especie no es reconocida en ninguna de las dos, null — la
+//      vista cae a su ícono de reemplazo actual (emoji), exactamente
+//      como hasta ahora
 //
 // Esta función NO decide qué mostrar en la sección "Fotos": esa sigue
 // viniendo pura de DB.getFotosByCultivo (fotos reales únicamente).
@@ -202,11 +210,20 @@ async function obtenerImagenCultivo(cultivo, eventos) {
     const url = await fotoUrlCache.getUrl(eventoConFoto.fotoId);
     if (url) return url;
   }
-  if (typeof identificarEspecie !== 'function' || typeof obtenerCultivoDataPorId !== 'function') return null;
-  const especieId = identificarEspecie(cultivo.especie);
-  if (!especieId) return null;
-  const datos = obtenerCultivoDataPorId(especieId);
-  return (datos && datos.imagen) || null;
+  if (typeof identificarEspecie === 'function' && typeof obtenerCultivoDataPorId === 'function') {
+    const especieId = identificarEspecie(cultivo.especie);
+    if (especieId) {
+      const datos = obtenerCultivoDataPorId(especieId);
+      if (datos && datos.imagen) return datos.imagen;
+    }
+  }
+  if (typeof buscarEspecieBibliotecaPorNombre === 'function') {
+    const especieBiblioteca = buscarEspecieBibliotecaPorNombre(cultivo.especie);
+    if (especieBiblioteca && especieBiblioteca.visual && especieBiblioteca.visual.imagen) {
+      return especieBiblioteca.visual.imagen;
+    }
+  }
+  return null;
 }
 
 // Crea un modal tipo "hoja" con animación de entrada/salida.

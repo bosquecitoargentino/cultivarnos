@@ -49,7 +49,7 @@ function renderNuevo(root, queryString) {
 
       <div class="form-group">
         <label class="form-label">Ubicación <span class="optional">(opcional)</span></label>
-        <input type="text" id="f-ubicacion" class="form-input" placeholder="Ej: Balcón, Huerta, Maceta 3..." autocomplete="off" />
+        <input type="text" id="f-ubicacion" class="form-input" placeholder="Ej: Balcón, Huerta, Maceta 3..." autocomplete="off" list="f-ubicacion-datalist" />
       </div>
 
       <div class="form-group">
@@ -88,6 +88,19 @@ function renderNuevo(root, queryString) {
   `;
 
   root.querySelector('#f-fecha').value = todayIsoDate();
+
+  // Autocomplete de ubicación (punto 25 del pedido): sugiere lugares ya
+  // usados en cualquier cultivo, sin bloquear nada — se escribe texto
+  // libre igual que siempre, esto solo ofrece atajos. Se carga después
+  // del primer pintado para no demorar la apertura del formulario.
+  if (typeof obtenerUbicacionesUsadas === 'function' && typeof datalistUbicacionesHtml === 'function') {
+    obtenerUbicacionesUsadas().then((ubicaciones) => {
+      if (!ubicaciones.length) return;
+      const wrap = document.createElement('div');
+      wrap.innerHTML = datalistUbicacionesHtml('f-ubicacion-datalist', ubicaciones);
+      root.appendChild(wrap.firstElementChild);
+    });
+  }
 
   // Preselección desde la Biblioteca: "＋ Registrar este cultivo" en una
   // ficha de especie llega acá como #/nuevo?especie=<id>. Completamos el

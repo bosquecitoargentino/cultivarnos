@@ -42,7 +42,16 @@ function etiquetaTipoSeguimiento(tipo) {
 // el dato y, si existe, la región de referencia entre paréntesis. La
 // observación más larga (si la especie la tiene) no se repite acá para no
 // duplicar contenido con la nota taxonómica.
-function etiquetaOrigen(origen) {
+// Nombre específico (no "etiquetaOrigen" a secas) a propósito: ese nombre
+// ya lo usa motor-siembra.js para otra cosa (el lugar de origen de un
+// lote — Semillero / Sin trasplantar). Como todos los <script> de la app
+// comparten un mismo scope global, dos funciones con el mismo nombre se
+// pisan en silencio — la que carga después gana y rompe a la otra. Bug
+// real encontrado en esta etapa: "Semillero" nunca aparecía en
+// Distribución actual/Espacios porque esta función (cargada después)
+// tapaba a la de motor-siembra.js. Corregido renombrando esta, que es la
+// más específica de las dos.
+function etiquetaOrigenEspecie(origen) {
   if (!origen || !origen.estatus) return '';
   const base = {
     nativa: 'Especie nativa',
@@ -153,7 +162,7 @@ async function renderFichaEspecie(id, root) {
         <li>${escapeHtml(identidad.tipoCrecimiento)}</li>
         ${identidad.estrato ? `<li>Estrato: ${escapeHtml(identidad.estrato)}</li>` : ''}
         ${identidad.organoCosechado ? `<li>Se aprovecha: ${escapeHtml(identidad.organoCosechado)}</li>` : ''}
-        ${origen && origen.estatus ? `<li>${escapeHtml(etiquetaOrigen(origen))}</li>` : ''}
+        ${origen && origen.estatus ? `<li>${escapeHtml(etiquetaOrigenEspecie(origen))}</li>` : ''}
       </ul>
       ${identidad.aliases && identidad.aliases.length ? `<p class="ficha-aliases">También conocida como: ${escapeHtml(identidad.aliases.join(', '))}</p>` : ''}
       ${identidad.notaTaxonomica ? `<p class="ficha-nota-taxonomica">⚠️ ${escapeHtml(identidad.notaTaxonomica)}</p>` : ''}

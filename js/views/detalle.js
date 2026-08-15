@@ -30,6 +30,12 @@ async function renderDetalle(id, root) {
   const resumenSiembra = calcularResumenSiembra(cultivo, eventos);
   const anotacionesSiembra = calcularAnotacionesHistorialSiembra(eventos);
 
+  // Resumen central del cultivo (motor-resumen.js) — única fuente para el
+  // bloque "Producción" de acá abajo y para "Ciclo completado" cuando el
+  // cultivo está finalizado. Ninguno de los dos vuelve a sumar cosechas ni
+  // a calcular días de seguimiento por su cuenta.
+  const resumen = generarResumenCultivo(cultivo, eventos);
+
   // Qué observar ahora: motor local, sin IA — no tiene sentido seguir
   // sugiriendo observaciones sobre un cultivo ya finalizado.
   const observar = cultivo.estado === 'finalizado'
@@ -85,7 +91,11 @@ async function renderDetalle(id, root) {
       <button id="btn-toggle-estado">${cultivo.estado === 'finalizado' ? '↩️ Reactivar' : '🏁 Finalizar'}</button>
     </div>
 
+    ${cultivo.estado === 'finalizado' ? `<section id="ciclo-completado-section"></section>` : ''}
+
     <section id="siembra-section"></section>
+
+    ${cultivo.estado !== 'finalizado' && resumen.cosechas ? `<section id="produccion-section"></section>` : ''}
 
     ${cultivo.estado !== 'finalizado' ? `
     <section>
@@ -121,9 +131,26 @@ async function renderDetalle(id, root) {
 
   // Seguimiento de siembra: tarjeta resumen + accesos directos a
   // germinación/trasplante/baja, o el link retroactivo si el cultivo
-  // todavía no tiene datos cuantitativos cargados.
+  // todavía no tiene datos cuantitativos cargados. Se omite en cultivos
+  // finalizados: "Ciclo completado" (más arriba) ya muestra estos mismos
+  // números de forma compacta, y seguir ofreciendo acciones que modifican
+  // cantidades (＋Germinación/Trasplante/Baja) sobre un ciclo ya cerrado
+  // no tendría sentido — reactivar es el camino correcto si hace falta
+  // seguir cargando movimientos.
   const siembraWrap = root.querySelector('#siembra-section');
-  pintarSeguimientoSiembra(siembraWrap, cultivo, resumenSiembra, () => renderDetalle(id, root));
+  if (cultivo.estado === 'finalizado') {
+    siembraWrap.innerHTML = '';
+  } else {
+    pintarSeguimientoSiembra(siembraWrap, cultivo, resumenSiembra, () => renderDetalle(id, root));
+  }
+
+  // Ciclo completado (solo cultivos finalizados) / Producción (solo
+  // activos con al menos una cosecha) — ambos leen exclusivamente del
+  // mismo `resumen` central, nunca recalculan nada por su cuenta.
+  const cicloWrap = root.querySelector('#ciclo-completado-section');
+  if (cicloWrap) pintarCicloCompletado(cicloWrap, cultivo, resumen);
+  const produccionWrap = root.querySelector('#produccion-section');
+  if (produccionWrap) pintarProduccion(produccionWrap, resumen);
 
   // Recordatorios pendientes
   if (pendientes.length) {
@@ -247,13 +274,26 @@ async function renderDetalle(id, root) {
   root.querySelector('#btn-editar-cultivo').addEventListener('click', () => abrirModalEditarCultivo(cultivo, resumenSiembra, () => renderDetalle(id, root)));
 
   root.querySelector('#btn-toggle-estado').addEventListener('click', async () => {
-    const nuevoEstado = cultivo.estado === 'finalizado' ? 'activo' : 'finalizado';
-    await DB.updateCultivo(id, {
-      estado: nuevoEstado,
-      fechaFinalizado: nuevoEstado === 'finalizado' ? todayIsoDate() : null,
-    });
-    showToast(nuevoEstado === 'finalizado' ? 'Cultivo finalizado' : 'Cultivo reactivado');
-    renderDetalle(id, root);
+    if (cultivo.estado === 'finalizado') {
+      // Reactivar es una acción simple y directa (punto 23 del pedido) — la
+      // reflexión/motivo del cierre anterior NO se borra: sigue viva para
+      // siempre en el evento 'finalizacion' ya escrito en el historial.
+      // cultivo.motivoFinalizacion/notaFinalizacion representan únicamente
+      // el cierre VIGENTE, así que se limpian acá; si se vuelve a finalizar
+      // más adelante, se escribe un evento 'finalizacion' nuevo, sin perder
+      // el anterior.
+      await DB.updateCultivo(id, {
+        estado: 'activo',
+        fechaFinalizado: null,
+        motivoFinalizacion: null,
+        notaFinalizacion: null,
+      });
+      await DB.addEvento({ cultivoId: id, tipo: 'reactivacion', fecha: todayIsoDate() });
+      showToast('Cultivo reactivado');
+      renderDetalle(id, root);
+      return;
+    }
+    abrirModalFinalizarCultivo(id, () => renderDetalle(id, root));
   });
 
   root.querySelector('#btn-eliminar').addEventListener('click', async () => {
@@ -264,10 +304,30 @@ async function renderDetalle(id, root) {
   });
 }
 
+// Línea compacta de una cosecha en el historial: cantidad (sumada por
+// magnitud compatible vía motor-cosecha.js, nunca fusionando unidades
+// distintas) + de dónde salió, si se cargó. Una cosecha registrada solo
+// con nota (sin mediciones) simplemente no agrega esta línea — sigue
+// contando como cosecha igual (punto 3 del pedido).
+function lineaCosechaParaEvento(ev) {
+  if (ev.tipo !== 'cosecha') return null;
+  const partes = [];
+  if (ev.mediciones && ev.mediciones.length) {
+    const sumado = sumarMedicionesCompatibles(ev.mediciones);
+    if (sumado.length) partes.push(formatearListaMediciones(sumado));
+  }
+  if (ev.ubicacion) partes.push(`📍 ${ev.ubicacion}`);
+  return partes.length ? partes.join(' · ') : null;
+}
+
 async function renderTimelineItem(ev, fotos, anotacionesSiembra, resumenSiembra) {
   const fotoUrl = await fotoUrlCache.getUrl(ev.fotoId);
   const fotoIndex = fotoUrl ? fotos.findIndex((f) => f.eventoId === ev.id) : -1;
   const lineaSiembra = anotacionesSiembra ? lineaSiembraParaEvento(ev, anotacionesSiembra, resumenSiembra) : null;
+  const lineaCosecha = lineaCosechaParaEvento(ev);
+  const motivoFinTxt = ev.tipo === 'finalizacion' && ev.motivo && typeof etiquetaMotivoFinalizacion === 'function'
+    ? etiquetaMotivoFinalizacion(ev.motivo)
+    : null;
   return `
     <div class="timeline-item">
       <div class="timeline-card">
@@ -277,6 +337,8 @@ async function renderTimelineItem(ev, fotos, anotacionesSiembra, resumenSiembra)
           <span class="timeline-fecha">${formatFecha(ev.fecha)}</span>
         </div>
         ${lineaSiembra ? `<div class="timeline-siembra">${escapeHtml(lineaSiembra)}</div>` : ''}
+        ${lineaCosecha ? `<div class="timeline-siembra">${escapeHtml(lineaCosecha)}</div>` : ''}
+        ${motivoFinTxt ? `<div class="timeline-siembra">${escapeHtml(motivoFinTxt)}</div>` : ''}
         ${ev.respuestas && ev.respuestas.length ? `
         <div class="timeline-respuestas">
           ${ev.respuestas.map((r) => `<div class="timeline-respuesta"><strong>${escapeHtml(r.etiqueta)}:</strong> ${escapeHtml(r.respuesta)}</div>`).join('')}
@@ -423,6 +485,128 @@ function pintarSeguimientoSiembra(wrap, cultivo, resumen, onChange) {
       if (btn.dataset.accion === 'baja') abrirModalBaja(cultivo.id, resumen, onChange);
     });
   }
+}
+
+// ---------------------------------------------------------------------
+// Producción — bloque compacto que aparece en la ficha ACTIVA en cuanto
+// hay al menos una cosecha registrada (punto 9 del pedido), y nunca
+// antes. Capa de presentación pura: toda la aritmética viene ya resuelta
+// de `resumen.cosechas` (motor-resumen.js) — acá solo se pinta.
+// ---------------------------------------------------------------------
+function pintarProduccion(wrap, resumen) {
+  const c = resumen.cosechas;
+  if (!c) { wrap.innerHTML = ''; return; }
+
+  const tiles = [{ valor: c.cantidad, label: c.cantidad === 1 ? 'cosecha' : 'cosechas' }];
+  c.produccion.forEach((m) => tiles.push({ valor: formatearMedicion(m), label: '' }));
+
+  const rangoFechas = c.primeraFecha && c.ultimaFecha && c.primeraFecha !== c.ultimaFecha
+    ? `Primera cosecha: ${formatFechaCorta(c.primeraFecha)} · Última: ${formatFechaCorta(c.ultimaFecha)}`
+    : (c.ultimaFecha ? `Cosechado el ${formatFechaCorta(c.ultimaFecha)}` : '');
+
+  wrap.innerHTML = `
+    <div class="siembra-card">
+      <div class="siembra-card-titulo">Producción 🍅</div>
+      <div class="siembra-tiles">
+        ${tiles.map((t) => `
+          <div class="siembra-tile">
+            <div class="siembra-tile-valor">${escapeHtml(String(t.valor))}</div>
+            ${t.label ? `<div class="siembra-tile-label">${escapeHtml(t.label)}</div>` : ''}
+          </div>`).join('')}
+      </div>
+      ${rangoFechas ? `<p class="siembra-modal-info">${escapeHtml(rangoFechas)}</p>` : ''}
+    </div>
+  `;
+}
+
+// ---------------------------------------------------------------------
+// Ciclo completado — al finalizar un cultivo, esto reemplaza "Qué
+// observar ahora" como cabecera de la ficha (punto 12 del pedido). TODO
+// lo que se muestra sale de `resumen` (motor-resumen.js) +
+// `elegirIndicadoresCiclo` — ninguna cuenta nueva se hace acá.
+// ---------------------------------------------------------------------
+function pintarCicloCompletado(wrap, cultivo, resumen) {
+  const inicio = formatFecha(resumen.fechaInicio);
+  const fin = resumen.fechaFin ? formatFecha(resumen.fechaFin) : null;
+  const diasTxt = resumen.diasSeguimiento != null ? `${resumen.diasSeguimiento} día${resumen.diasSeguimiento === 1 ? '' : 's'}` : null;
+
+  const indicadores = elegirIndicadoresCiclo(resumen);
+  const fin_ = resumen.finalizacion;
+
+  wrap.innerHTML = `
+    <div class="siembra-card">
+      <div class="siembra-card-titulo">Ciclo completado 🌱</div>
+      <p class="siembra-modal-info">${[fin ? `${inicio} → ${fin}` : inicio, diasTxt].filter(Boolean).join(' · ')}</p>
+      ${fin_ && fin_.motivoLabel ? `<span class="badge finalizado">${escapeHtml(fin_.motivoLabel)}</span>` : ''}
+      ${indicadores.length ? `
+      <div class="detalle-badges" style="margin-top:10px;">
+        ${indicadores.map((i) => `<span class="badge">${i.icon} ${escapeHtml(i.texto)}</span>`).join('')}
+      </div>` : ''}
+      ${fin_ && fin_.nota ? `
+      <div class="detalle-nota" style="margin-top:10px;">
+        <strong>Lo que me deja este cultivo</strong><br />${escapeHtml(fin_.nota)}
+      </div>` : ''}
+      <button type="button" id="btn-compartir-resumen" class="btn-secondary" style="margin-top:14px;">📤 Compartir resumen</button>
+    </div>
+  `;
+
+  wrap.querySelector('#btn-compartir-resumen').addEventListener('click', () => abrirCompartirResumen(cultivo.id));
+}
+
+// ---------------------------------------------------------------------
+// Finalizar cultivo — motivo + reflexión, ambos opcionales (punto 11 del
+// pedido: "Finalizar" con todo vacío tiene que seguir funcionando). Se
+// guarda SOLO lo que pertenece al cierre (cultivo.motivoFinalizacion/
+// notaFinalizacion, punto 12: nunca una copia congelada de las métricas)
+// más un evento 'finalizacion' permanente en el historial — así, si más
+// adelante se reactiva y se vuelve a finalizar, cada cierre queda
+// registrado sin pisar al anterior (punto 23 del pedido).
+// ---------------------------------------------------------------------
+function abrirModalFinalizarCultivo(cultivoId, onDone) {
+  let motivoSeleccionado = null;
+
+  const { backdrop, close } = createModal(`
+    <div class="modal-sheet">
+      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <h2>Finalizar cultivo</h2>
+      <div class="form-group">
+        <label class="form-label">¿Por qué termina este seguimiento? <span class="optional">(opcional)</span></label>
+        <div class="chip-group" id="fin-motivo">
+          ${MOTIVOS_FINALIZACION.map((m) => `<div class="chip-option" data-value="${m.value}">${escapeHtml(m.label)}</div>`).join('')}
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">¿Qué te deja este cultivo? <span class="optional">(opcional)</span></label>
+        <textarea id="fin-nota" class="form-textarea" placeholder="Un aprendizaje, algo para recordar la próxima..."></textarea>
+      </div>
+      <button type="button" id="fin-guardar" class="btn-primary">Finalizar cultivo</button>
+    </div>
+  `);
+  backdrop.querySelector('#modal-close').addEventListener('click', close);
+
+  backdrop.querySelector('#fin-motivo').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip-option');
+    if (!chip) return;
+    const grupo = backdrop.querySelector('#fin-motivo');
+    const yaSeleccionado = chip.classList.contains('selected');
+    grupo.querySelectorAll('.chip-option').forEach((c) => c.classList.remove('selected'));
+    motivoSeleccionado = yaSeleccionado ? null : chip.dataset.value;
+    if (motivoSeleccionado) chip.classList.add('selected');
+  });
+
+  backdrop.querySelector('#fin-guardar').addEventListener('click', async () => {
+    const nota = backdrop.querySelector('#fin-nota').value.trim() || null;
+    await DB.updateCultivo(cultivoId, {
+      estado: 'finalizado',
+      fechaFinalizado: todayIsoDate(),
+      motivoFinalizacion: motivoSeleccionado,
+      notaFinalizacion: nota,
+    });
+    await DB.addEvento({ cultivoId, tipo: 'finalizacion', fecha: todayIsoDate(), motivo: motivoSeleccionado, nota });
+    close();
+    showToast('Cultivo finalizado 🌱');
+    onDone();
+  });
 }
 
 // ¿Cuántas nuevas germinaron? — mobile-first: muestra en vivo "ya habían
@@ -784,7 +968,7 @@ function abrirModalEditarCultivo(cultivo, resumenSiembra, onDone) {
       </div>
       <div class="form-group">
         <label class="form-label">Ubicación <span class="optional">(opcional)</span></label>
-        <input type="text" id="edit-ubicacion" class="form-input" value="${escapeHtml(cultivo.ubicacion || '')}" autocomplete="off" />
+        <input type="text" id="edit-ubicacion" class="form-input" value="${escapeHtml(cultivo.ubicacion || '')}" autocomplete="off" list="edit-ubicacion-datalist" />
       </div>
       <div class="form-group">
         <label class="form-label">Nota <span class="optional">(opcional)</span></label>
@@ -795,6 +979,15 @@ function abrirModalEditarCultivo(cultivo, resumenSiembra, onDone) {
     </div>
   `);
   backdrop.querySelector('#modal-close').addEventListener('click', close);
+
+  if (typeof obtenerUbicacionesUsadas === 'function' && typeof datalistUbicacionesHtml === 'function') {
+    obtenerUbicacionesUsadas().then((ubicaciones) => {
+      if (!ubicaciones.length) return;
+      const wrap = document.createElement('div');
+      wrap.innerHTML = datalistUbicacionesHtml('edit-ubicacion-datalist', ubicaciones);
+      backdrop.appendChild(wrap.firstElementChild);
+    });
+  }
 
   const errorEl = backdrop.querySelector('#edit-error');
   const tipoGroup = backdrop.querySelector('#edit-tipo-inicio');
@@ -1144,9 +1337,42 @@ async function renderGaleriaFotos(cultivoId, root) {
   });
 }
 
+// Filas de medición dentro del modal de evento: arranca con UNA sola
+// (punto 2 del pedido — nunca mostrar dos campos de entrada de una), y
+// revela una segunda recién cuando la persona toca "+ Agregar otra
+// medida" (para el caso real de "12 tomates + 1,8 kg" en la misma
+// cosecha). Cantidad sigue siendo 100% opcional: una fila sin número
+// cargado simplemente no se guarda como medición.
+function renderMedicionRowHtml(index) {
+  return `
+    <div class="cosecha-medicion-row" data-row="${index}">
+      <input type="text" inputmode="decimal" class="form-input cosecha-valor" placeholder="Ej: 1,8" />
+      <select class="form-select cosecha-unidad">
+        ${UNIDADES_COSECHA.map((u) => `<option value="${u.value}">${u.label}</option>`).join('')}
+      </select>
+      <input type="text" class="form-input cosecha-unidad-libre hidden" placeholder="¿Qué unidad? (ej: cajones)" autocomplete="off" />
+    </div>
+  `;
+}
+
+function wireMedicionRow(rowEl) {
+  const unidadSelect = rowEl.querySelector('.cosecha-unidad');
+  const libreInput = rowEl.querySelector('.cosecha-unidad-libre');
+  unidadSelect.addEventListener('change', () => {
+    libreInput.classList.toggle('hidden', unidadSelect.value !== 'otro');
+  });
+}
+
+function parseValorCosechaInput(str) {
+  if (!str) return null;
+  const n = parseFloat(String(str).trim().replace(',', '.'));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 function openEventoModal(cultivoId, onSaved) {
   let fotoBlob = null;
   let tipoSeleccionado = 'observacion';
+  let cosechaInicializada = false;
 
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
@@ -1155,9 +1381,20 @@ function openEventoModal(cultivoId, onSaved) {
       <div class="form-group">
         <label class="form-label">Tipo</label>
         <div class="chip-group" id="ev-tipo">
-          ${EVENTO_TIPOS.map((t) => `<div class="chip-option ${t.value === tipoSeleccionado ? 'selected' : ''}" data-value="${t.value}">${t.icon} ${t.label}</div>`).join('')}
+          ${EVENTO_TIPOS.filter((t) => t.value !== 'finalizacion' && t.value !== 'reactivacion').map((t) => `<div class="chip-option ${t.value === tipoSeleccionado ? 'selected' : ''}" data-value="${t.value}">${t.icon} ${t.label}</div>`).join('')}
         </div>
       </div>
+
+      <div class="form-group hidden" id="ev-cosecha-section">
+        <label class="form-label">¿Cuánto cosechaste? <span class="optional">(opcional)</span></label>
+        <div id="ev-cosecha-mediciones"></div>
+        <button type="button" id="ev-cosecha-agregar-medida" class="link-ver-todas">＋ Agregar otra medida</button>
+
+        <label class="form-label" style="margin-top:14px;">¿De dónde cosechaste? <span class="optional">(opcional)</span></label>
+        <div id="ev-cosecha-ubicacion-chips"></div>
+        <input type="text" id="ev-cosecha-ubicacion" class="form-input" placeholder="Ej: Bancal 2" autocomplete="off" />
+      </div>
+
       <div class="form-group">
         <label class="form-label">Fecha</label>
         <input type="date" id="ev-fecha" class="form-input" value="${todayIsoDate()}" />
@@ -1183,6 +1420,66 @@ function openEventoModal(cultivoId, onSaved) {
 
   backdrop.querySelector('#modal-close').addEventListener('click', close);
 
+  // La sección de cosecha (mediciones + ubicación) recién carga sus datos
+  // (distribución actual, ubicaciones ya usadas) la primera vez que se
+  // selecciona ese tipo — así elegir cualquier OTRO tipo de evento (el
+  // caso más común) no paga ningún costo de lectura extra a IndexedDB, y
+  // el modal sigue abriendo instantáneo (prioridad: registro en pocos
+  // segundos).
+  const cosechaSection = backdrop.querySelector('#ev-cosecha-section');
+  const medicionesWrap = backdrop.querySelector('#ev-cosecha-mediciones');
+  const agregarMedidaBtn = backdrop.querySelector('#ev-cosecha-agregar-medida');
+  const ubicacionInput = backdrop.querySelector('#ev-cosecha-ubicacion');
+  const ubicacionChipsWrap = backdrop.querySelector('#ev-cosecha-ubicacion-chips');
+
+  async function inicializarCosechaSection() {
+    if (cosechaInicializada) return;
+    cosechaInicializada = true;
+
+    medicionesWrap.innerHTML = renderMedicionRowHtml(0);
+    wireMedicionRow(medicionesWrap.querySelector('[data-row="0"]'));
+    agregarMedidaBtn.addEventListener('click', () => {
+      const nuevaFila = document.createElement('div');
+      nuevaFila.innerHTML = renderMedicionRowHtml(medicionesWrap.children.length);
+      const filaEl = nuevaFila.firstElementChild;
+      medicionesWrap.appendChild(filaEl);
+      wireMedicionRow(filaEl);
+      agregarMedidaBtn.classList.add('hidden');
+    }, { once: true });
+
+    const [cultivo, eventos, ubicacionesUsadas] = await Promise.all([
+      DB.getCultivo(cultivoId),
+      DB.getEventosByCultivo(cultivoId),
+      typeof obtenerUbicacionesUsadas === 'function' ? obtenerUbicacionesUsadas() : Promise.resolve([]),
+    ]);
+    const distribucion = typeof obtenerDistribucionActual === 'function' ? obtenerDistribucionActual(cultivo, eventos) : [];
+    const ubicacionesActuales = distribucion.map((d) => d.ubicacion).filter(Boolean);
+
+    // Con un único lugar vigente, lo pre-cargamos directo (menos toques);
+    // con varios, se ofrecen como chips rápidos arriba del campo de texto
+    // (mismo patrón ya usado para destino de trasplante) sin perder la
+    // posibilidad de escribir cualquier otro lugar a mano.
+    if (ubicacionesActuales.length === 1) {
+      ubicacionInput.value = ubicacionesActuales[0];
+    } else if (ubicacionesActuales.length > 1) {
+      ubicacionChipsWrap.innerHTML = `<div class="chip-group">${ubicacionesActuales.map((u) => `<div class="chip-option" data-value="${escapeHtml(u)}">${escapeHtml(u)}</div>`).join('')}</div>`;
+      ubicacionChipsWrap.addEventListener('click', (e) => {
+        const chip = e.target.closest('.chip-option');
+        if (!chip) return;
+        ubicacionChipsWrap.querySelectorAll('.chip-option').forEach((c) => c.classList.remove('selected'));
+        chip.classList.add('selected');
+        ubicacionInput.value = chip.dataset.value;
+      });
+    }
+
+    if (ubicacionesUsadas.length && typeof datalistUbicacionesHtml === 'function') {
+      ubicacionInput.setAttribute('list', 'ev-cosecha-ubicacion-datalist');
+      const datalistWrap = document.createElement('div');
+      datalistWrap.innerHTML = datalistUbicacionesHtml('ev-cosecha-ubicacion-datalist', ubicacionesUsadas);
+      backdrop.appendChild(datalistWrap.firstElementChild);
+    }
+  }
+
   const tipoGroup = backdrop.querySelector('#ev-tipo');
   tipoGroup.addEventListener('click', (e) => {
     const chip = e.target.closest('.chip-option');
@@ -1190,6 +1487,8 @@ function openEventoModal(cultivoId, onSaved) {
     tipoGroup.querySelectorAll('.chip-option').forEach((c) => c.classList.remove('selected'));
     chip.classList.add('selected');
     tipoSeleccionado = chip.dataset.value;
+    cosechaSection.classList.toggle('hidden', tipoSeleccionado !== 'cosecha');
+    if (tipoSeleccionado === 'cosecha') inicializarCosechaSection();
   });
 
   const photoPicker = backdrop.querySelector('#ev-photo-picker');
@@ -1246,13 +1545,35 @@ function openEventoModal(cultivoId, onSaved) {
     let fotoId = null;
     if (fotoBlob) fotoId = await DB.addFoto(fotoBlob);
 
-    await DB.addEvento({
+    const eventoNuevo = {
       cultivoId,
       tipo: tipoSeleccionado,
       fecha,
       nota: nota || null,
       fotoId,
-    });
+    };
+
+    // Cosecha: la cantidad es 100% opcional (punto 3 del pedido) — una
+    // fila sin número cargado no genera medición, y una cosecha sin
+    // ninguna medición sigue siendo un evento válido (nunca "0 kg"). Cada
+    // fila válida es {valor, unidad, unidadLibre?}; motor-cosecha.js es
+    // quien después sabe sumarlas/mostrarlas — acá solo se recolectan tal
+    // cual se cargaron.
+    if (tipoSeleccionado === 'cosecha' && cosechaInicializada) {
+      const mediciones = Array.from(medicionesWrap.querySelectorAll('.cosecha-medicion-row'))
+        .map((row) => {
+          const valor = parseValorCosechaInput(row.querySelector('.cosecha-valor').value);
+          if (valor == null) return null;
+          const unidad = row.querySelector('.cosecha-unidad').value;
+          const unidadLibre = unidad === 'otro' ? (row.querySelector('.cosecha-unidad-libre').value.trim() || null) : undefined;
+          return unidad === 'otro' ? { valor, unidad, unidadLibre } : { valor, unidad };
+        })
+        .filter(Boolean);
+      eventoNuevo.mediciones = mediciones.length ? mediciones : null;
+      eventoNuevo.ubicacion = ubicacionInput.value.trim() || null;
+    }
+
+    await DB.addEvento(eventoNuevo);
 
     // Algunos tipos de evento (trasplante, poda...) tienen un seguimiento
     // típico que vale la pena ofrecer — nunca se crea el recordatorio sin

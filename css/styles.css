@@ -24,6 +24,21 @@
 
 * { box-sizing: border-box; }
 
+/* Utilidad genérica de ocultamiento — el resto del código usa
+   classList.add/toggle('hidden') en muchos lugares, pero hasta ahora
+   cada uno necesitaba su propia regla puntual (".remove-photo.hidden",
+   "#baja-destino-group.hidden", etc.); varios ni siquiera la tenían
+   (bug real encontrado en esta etapa: #f-recordatorio-group en "Nuevo
+   cultivo" quedaba SIEMPRE visible, aunque el checkbox "Agregar
+   recordatorio" estuviera destildado, porque nunca existió una regla que
+   lo ocultara). Esta única regla genérica cubre a todos — nuevos y
+   viejos — sin tener que agregar una línea de CSS por cada elemento
+   nuevo que se oculte/muestre por JS.
+   Las reglas puntuales de más abajo (.remove-photo.hidden, etc.) quedan
+   igual, son redundantes con ésta pero no generan ningún conflicto
+   (mismo display:none) — no hace falta tocarlas. */
+.hidden { display: none !important; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
@@ -1581,3 +1596,39 @@ button.link-ver-todas:active { transform: scale(0.98); }
   line-height: 1.45;
 }
 .ficha-etapa-observar li { margin-bottom: 2px; }
+
+/* ---------- Cosecha: filas de medición en el modal de evento ---------- */
+.cosecha-medicion-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.cosecha-medicion-row .cosecha-valor { flex: 1 1 90px; min-width: 0; }
+.cosecha-medicion-row .cosecha-unidad { flex: 1 1 120px; min-width: 0; }
+.cosecha-medicion-row .cosecha-unidad-libre { flex: 1 1 100%; }
+
+/* ---------- Espacios ---------- */
+.espacio-card { cursor: pointer; }
+
+/* ---------- Compartir resumen ---------- */
+.compartir-preview-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 14px 0;
+  padding: 12px;
+  background: var(--verde-suave);
+  border-radius: var(--radio);
+}
+.compartir-preview {
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  border-radius: var(--radio-chico);
+  box-shadow: var(--sombra);
+  background: var(--crema-card);
+}
+.compartir-foto-grid { margin-bottom: 10px; }
+.compartir-estado {
+  text-align: center;
+}

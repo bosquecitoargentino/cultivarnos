@@ -10,7 +10,8 @@ const ROUTES = {
   '#/configuracion': { render: renderConfiguracion, nav: null },
   '#/calendario': { render: renderCalendario, nav: null },
   '#/biblioteca': { render: renderBiblioteca, nav: 'biblioteca' },
-  // '#/cultivo/:id' y '#/biblioteca/:id' se manejan aparte
+  '#/espacios': { render: renderEspacios, nav: null },
+  // '#/cultivo/:id', '#/biblioteca/:id' y '#/espacios/:clave' se manejan aparte
 };
 
 function parseRoute(hash) {
@@ -32,6 +33,10 @@ function parseRoute(hash) {
   const fichaMatch = path.match(/^#\/biblioteca\/([a-z0-9-]+)$/);
   if (fichaMatch) {
     return { render: (root) => renderFichaEspecie(fichaMatch[1], root), nav: 'biblioteca' };
+  }
+  const espacioMatch = path.match(/^#\/espacios\/([^/]+)$/);
+  if (espacioMatch) {
+    return { render: (root) => renderEspacioDetalle(decodeURIComponent(espacioMatch[1]), root), nav: null };
   }
   const base = ROUTES[path] || ROUTES['#/inicio'];
   return { render: (root) => base.render(root, queryString), nav: base.nav };
