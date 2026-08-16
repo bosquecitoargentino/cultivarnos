@@ -11,7 +11,7 @@
 // (ej. la pantalla de Configuración) NO tiene su propia copia del número:
 // lo consulta en tiempo de ejecución mandándole un mensaje a este Service
 // Worker (ver utils.js#obtenerVersionApp). Una sola fuente de verdad real.
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 
 const CACHE_NAME = `cultivarnos-v${APP_VERSION}`;
 const APP_SHELL = [
@@ -50,6 +50,10 @@ const APP_SHELL = [
   './js/views/banco-detalle.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  // Logo del header (ver css/styles.css#.topbar-title) — se precachea acá
+  // igual que los íconos de PWA de arriba, así aparece desde la primera
+  // apertura offline y no depende de haber tenido señal antes.
+  './assets/logo-cultivarnos.svg',
   // Imágenes predeterminadas por especie (assets locales, livianas — ver
   // js/data/cultivos-data.js#imagen). Se precachean acá para que se vean
   // offline desde la primera instalación, sin depender de haber tenido

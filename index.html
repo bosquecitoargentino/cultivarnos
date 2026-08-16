@@ -17,7 +17,9 @@
 <body>
 
 <header class="topbar">
-  <div class="topbar-title">🌿 Cultivarnos</div>
+  <div class="topbar-title">
+    <img src="assets/logo-cultivarnos.svg" alt="Cultivarnos" class="topbar-logo" width="26" height="26" />
+  </div>
   <button id="btn-menu" class="icon-btn" aria-label="Más opciones" title="Más opciones"></button>
 </header>
 
@@ -155,7 +157,7 @@
   document.addEventListener('click', (e) => {
     const panel = document.getElementById('menu-panel');
     const btn = document.getElementById('btn-menu');
-    if (!panel.contains(e.target) && e.target !== btn && !panel.classList.contains('hidden')) {
+    if (!panel.contains(e.target) && !btn.contains(e.target) && !panel.classList.contains('hidden')) {
       panel.classList.add('hidden');
     }
   });
