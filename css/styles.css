@@ -1587,3 +1587,110 @@ button.link-ver-todas:active { transform: scale(0.98); }
 .compartir-estado {
   text-align: center;
 }
+
+/* ---------- Banco de propagación ---------- */
+.lote-grupo {
+  background: var(--crema-card);
+  border-radius: var(--radio);
+  padding: 12px 14px;
+  box-shadow: var(--sombra);
+  margin-bottom: 12px;
+}
+.lote-grupo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.lote-grupo-nombre {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--verde-oscuro);
+}
+.lote-grupo-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lote-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding-top: 10px;
+  border-top: 1px solid var(--borde);
+}
+.lote-grupo-lista .lote-fila:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+.lote-fila:active { opacity: 0.75; }
+.lote-fila-icono { flex: 0 0 auto; font-size: 20px; }
+.lote-fila-info { flex: 1 1 auto; min-width: 0; }
+.lote-fila-variedad {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--texto);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lote-fila-meta {
+  font-size: 12px;
+  color: var(--texto-suave);
+  margin-top: 1px;
+}
+.lote-fila-cantidad {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--verde-oscuro);
+  text-align: right;
+}
+
+/* Especie: sugerencias de búsqueda contra la Biblioteca (alta y edición
+   de lotes del Banco) */
+.especie-sugerencias {
+  margin-top: 6px;
+  background: var(--crema-card);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  overflow: hidden;
+  box-shadow: var(--sombra);
+}
+.especie-sugerencias.hidden { display: none; }
+.especie-sugerencia {
+  padding: 10px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--borde);
+}
+.especie-sugerencia:last-child { border-bottom: none; }
+.especie-sugerencia:active { background: var(--verde-suave); }
+.especie-sugerencia-libre { color: var(--texto-suave); font-style: italic; }
+
+/* Cantidad: número + unidad lado a lado, mismo patrón que
+   .cosecha-medicion-row */
+.cantidad-numerica-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cantidad-numerica-row input { flex: 1 1 100px; min-width: 0; }
+
+/* "Más detalles": <details> nativo, estilizado apenas para que combine
+   con el resto de los formularios, sin construir un componente nuevo. */
+.mas-detalles {
+  margin-bottom: 16px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  padding: 4px 12px;
+}
+.mas-detalles summary {
+  padding: 10px 0;
+  font-weight: 600;
+  color: var(--verde);
+  cursor: pointer;
+}
+.mas-detalles[open] summary { margin-bottom: 4px; }

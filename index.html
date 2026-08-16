@@ -25,6 +25,7 @@
   <button id="btn-export" class="menu-item">⬇️ Exportar respaldo</button>
   <label class="menu-item" for="input-import">⬆️ Importar respaldo</label>
   <input type="file" id="input-import" accept="application/json" hidden />
+  <button id="btn-banco" class="menu-item">🌰 Banco</button>
   <button id="btn-configuracion" class="menu-item">⚙️ Configuración</button>
 </div>
 
@@ -64,6 +65,7 @@
 <script src="js/data/cultivos-data.js"></script>
 <script src="js/data/biblioteca-especies.js"></script>
 <script src="js/motor-biblioteca.js"></script>
+<script src="js/motor-banco.js"></script>
 <script src="js/motor-estacional.js"></script>
 <script src="js/data/preguntas-cultivos.js"></script>
 <script src="js/motor-observacion.js"></script>
@@ -82,6 +84,9 @@
 <script src="js/views/ficha-especie.js"></script>
 <script src="js/views/espacios.js"></script>
 <script src="js/views/compartir.js"></script>
+<script src="js/views/banco.js"></script>
+<script src="js/views/banco-nuevo.js"></script>
+<script src="js/views/banco-detalle.js"></script>
 <script src="js/app.js"></script>
 <script>
   // Menú de exportación / importación
@@ -121,6 +126,11 @@
     } finally {
       e.target.value = '';
     }
+  });
+
+  document.getElementById('btn-banco').addEventListener('click', () => {
+    document.getElementById('menu-panel').classList.add('hidden');
+    navigate('#/banco');
   });
 
   document.getElementById('btn-configuracion').addEventListener('click', () => {

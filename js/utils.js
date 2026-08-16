@@ -459,6 +459,11 @@ function validarRespaldo(data) {
   if (data.fotos !== undefined && !Array.isArray(data.fotos)) return invalido();
   if (data.conversaciones !== undefined && !Array.isArray(data.conversaciones)) return invalido();
   if (data.configuracion !== undefined && (typeof data.configuracion !== 'object' || data.configuracion === null || Array.isArray(data.configuracion))) return invalido();
+  // lotesPropagacion (Banco): agregado después de que ya había respaldos en
+  // uso — igual que recordatorios/fotos/conversaciones, opcional en el
+  // archivo (un respaldo viejo legítimamente no lo tiene) pero validado si
+  // está presente.
+  if (data.lotesPropagacion !== undefined && !Array.isArray(data.lotesPropagacion)) return invalido();
 
   const tieneId = (x) => typeof x.id === 'number' || typeof x.id === 'string';
   for (const c of data.cultivos) {
@@ -472,6 +477,9 @@ function validarRespaldo(data) {
   }
   for (const f of data.fotos || []) {
     if (!f || typeof f !== 'object' || typeof f.dataUrl !== 'string') return invalido();
+  }
+  for (const l of data.lotesPropagacion || []) {
+    if (!l || typeof l !== 'object' || !tieneId(l) || typeof l.tipoMaterial !== 'string') return invalido();
   }
 
   return { ok: true };

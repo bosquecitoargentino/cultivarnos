@@ -2,7 +2,7 @@
 // Sin dependencias externas. Expone window.DB con métodos async.
 
 const DB_NAME = 'cultivarnos';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let dbPromise = null;
 
@@ -51,6 +51,16 @@ function openDB() {
       // inerte.
       if (!db.objectStoreNames.contains('conversaciones')) {
         db.createObjectStore('conversaciones', { keyPath: 'id' });
+      }
+
+      // Banco de propagación (semillas, bulbos, rizomas, esquejes, etc.).
+      // Store independiente de "cultivos" — un Lote no es un cultivo, es
+      // material guardado. Sin índices por ahora: en V1 siempre se lista
+      // todo y se agrupa/filtra en memoria (mismo criterio que ya usa
+      // motor-espacios.js sobre cultivos), así que un índice acá solo
+      // anticiparía una necesidad que todavía no existe.
+      if (!db.objectStoreNames.contains('lotesPropagacion')) {
+        db.createObjectStore('lotesPropagacion', { keyPath: 'id', autoIncrement: true });
       }
     };
 
@@ -331,9 +341,58 @@ const DB = {
     return reqToPromise(store.delete(id));
   },
 
+  // ---------- BANCO (lotes de propagación) ----------
+  async addLote(data) {
+    const store = await tx('lotesPropagacion', 'readwrite');
+    const now = new Date().toISOString();
+    const record = { ...data, createdAt: now, updatedAt: now };
+    const id = await reqToPromise(store.add(record));
+    return id;
+  },
+
+  async updateLote(id, changes) {
+    const store = await tx('lotesPropagacion', 'readwrite');
+    const existing = await reqToPromise(store.get(id));
+    if (!existing) throw new Error('Lote no encontrado');
+    const updated = { ...existing, ...changes, updatedAt: new Date().toISOString() };
+    await reqToPromise(store.put(updated));
+    return updated;
+  },
+
+  async getLote(id) {
+    const store = await tx('lotesPropagacion');
+    return reqToPromise(store.get(id));
+  },
+
+  async getAllLotes() {
+    const store = await tx('lotesPropagacion');
+    return reqToPromise(store.getAll());
+  },
+
+  // Borra un lote y, si tiene una foto propia, también la foto — el Banco
+  // es independiente de cultivos/eventos, así que a diferencia de
+  // deleteCultivoCompleto acá no hace falta chequear referencias cruzadas:
+  // fotoId en un lote nunca se comparte con otro registro.
+  async deleteLoteCompleto(id) {
+    const lote = await this.getLote(id);
+    if (!lote) return false;
+
+    const db = await openDB();
+    const storeNames = lote.fotoId != null ? ['lotesPropagacion', 'fotos'] : ['lotesPropagacion'];
+    const t = db.transaction(storeNames, 'readwrite');
+    t.objectStore('lotesPropagacion').delete(id);
+    if (lote.fotoId != null) t.objectStore('fotos').delete(lote.fotoId);
+
+    return new Promise((resolve, reject) => {
+      t.oncomplete = () => resolve(true);
+      t.onerror = () => reject(t.error);
+      t.onabort = () => reject(t.error || new Error('Eliminación abortada'));
+    });
+  },
+
   // ---------- EXPORT / IMPORT ----------
   async exportAll() {
-    const [cultivos, eventos, recordatorios, configuracion, conversaciones] = await Promise.all([
+    const [cultivos, eventos, recordatorios, configuracion, conversaciones, lotesPropagacion] = await Promise.all([
       this.getAllCultivos(),
       (async () => {
         const store = await tx('eventos');
@@ -348,6 +407,7 @@ const DB = {
         const store = await tx('conversaciones');
         return reqToPromise(store.getAll());
       })(),
+      this.getAllLotes(),
     ]);
 
     const fotosStore = await tx('fotos');
@@ -369,6 +429,7 @@ const DB = {
       fotos,
       configuracion,
       conversaciones,
+      lotesPropagacion,
     };
   },
 
@@ -385,7 +446,7 @@ const DB = {
     );
 
     const db = await openDB();
-    const storeNames = ['cultivos', 'eventos', 'recordatorios', 'fotos', 'configuracion', 'conversaciones'];
+    const storeNames = ['cultivos', 'eventos', 'recordatorios', 'fotos', 'configuracion', 'conversaciones', 'lotesPropagacion'];
     const t = db.transaction(storeNames, 'readwrite');
 
     if (replace) {
@@ -414,6 +475,12 @@ const DB = {
 
     const conversacionesStore = t.objectStore('conversaciones');
     (data.conversaciones || []).forEach((c) => conversacionesStore.put(c));
+
+    // Respaldos anteriores a esta función no tienen "lotesPropagacion" — no
+    // pasa nada, el Banco queda vacío después de importar (mismo criterio
+    // ya usado arriba para "configuracion").
+    const lotesStore = t.objectStore('lotesPropagacion');
+    (data.lotesPropagacion || []).forEach((l) => lotesStore.put(l));
 
     return new Promise((resolve, reject) => {
       t.oncomplete = () => resolve(true);

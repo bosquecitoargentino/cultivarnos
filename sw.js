@@ -11,7 +11,7 @@
 // (ej. la pantalla de Configuración) NO tiene su propia copia del número:
 // lo consulta en tiempo de ejecución mandándole un mensaje a este Service
 // Worker (ver utils.js#obtenerVersionApp). Una sola fuente de verdad real.
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.0';
 
 const CACHE_NAME = `cultivarnos-v${APP_VERSION}`;
 const APP_SHELL = [
@@ -43,6 +43,10 @@ const APP_SHELL = [
   './js/views/ficha-especie.js',
   './js/views/espacios.js',
   './js/views/compartir.js',
+  './js/motor-banco.js',
+  './js/views/banco.js',
+  './js/views/banco-nuevo.js',
+  './js/views/banco-detalle.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   // Imágenes predeterminadas por especie (assets locales, livianas — ver
