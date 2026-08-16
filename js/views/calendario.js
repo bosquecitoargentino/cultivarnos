@@ -41,10 +41,17 @@ async function renderCalendario(root) {
   function pintar() {
     mesLabel.textContent = nombreMes(mesActual);
     const grupos = obtenerCalendarioMes(config.hemisferio, mesActual);
+    // Almácigo se queda con el emoji: no hay un ícono en la lámina que
+    // distinga "semillero" de "siembra directa" sin repetir el mismo
+    // dibujo de 'siembra' en dos títulos vecinos, lo cual generaría la
+    // mezcla confusa que se pidió evitar en esta pasada. Siembra directa
+    // y Trasplante sí tienen un ícono propio y exacto, así que usan el
+    // ícono del sistema — mismo dibujo que ya se ve en el historial de
+    // eventos, para que "Trasplante" se lea igual en todos lados.
     const secciones = [
       { titulo: '🌱 Almácigo', items: grupos.almacigo },
-      { titulo: '🌾 Siembra directa', items: grupos.directa },
-      { titulo: '🪴 Trasplante (aproximado)', items: grupos.trasplante },
+      { titulo: `${renderIcon('siembra', { scale: 'xs' })} Siembra directa`, items: grupos.directa },
+      { titulo: `${renderIcon('trasplante', { scale: 'xs' })} Trasplante (aproximado)`, items: grupos.trasplante },
     ].filter((s) => s.items.length);
 
     if (!secciones.length) {

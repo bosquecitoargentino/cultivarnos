@@ -19,7 +19,7 @@ const TIPO_INICIO_LABELS = {
 const EVENTO_TIPOS = [
   { value: 'siembra', label: 'Siembra', icon: '🌰', iconSvg: 'siembra' },
   { value: 'observacion', label: 'Observación', icon: '👁️', iconSvg: 'observacion' },
-  { value: 'revision', label: 'Revisión guiada', icon: '🔍' },
+  { value: 'revision', label: 'Revisión guiada', icon: '🔍', iconSvg: 'buscar' },
   { value: 'fotografia', label: 'Fotografía', icon: '📷', iconSvg: 'foto' },
   { value: 'germinacion', label: 'Germinación', icon: '🌱', iconSvg: 'germinacion' },
   { value: 'trasplante', label: 'Trasplante', icon: '🪴', iconSvg: 'trasplante' },
@@ -45,7 +45,7 @@ function eventoLabel(tipo) {
 function eventoIcon(tipo) {
   const found = EVENTO_TIPOS.find((e) => e.value === tipo);
   if (!found) return '📝';
-  return found.iconSvg ? renderIcon(found.iconSvg, { size: 18 }) : found.icon;
+  return found.iconSvg ? renderIcon(found.iconSvg, { scale: 'xs' }) : found.icon;
 }
 
 // Normaliza texto libre para poder compararlo/buscarlo sin depender de

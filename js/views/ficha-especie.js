@@ -106,7 +106,7 @@ function pintarEtapas(etapas) {
       const etapa = etapas[key];
       const dias = formatRango(etapa.diasOrientativos, ' días');
       const observar = (etapa.observar || []).slice(0, 2);
-      const icono = ICONO_ETAPA[key] ? `${renderIcon(ICONO_ETAPA[key], { size: 16, className: 'ficha-etapa-icono' })} ` : '';
+      const icono = ICONO_ETAPA[key] ? `${renderIcon(ICONO_ETAPA[key], { scale: 'xs', className: 'ficha-etapa-icono' })} ` : '';
       return `
         <div class="ficha-etapa">
           <div class="ficha-etapa-titulo">${icono}${escapeHtml(ETIQUETA_ETAPA[key] || key)}${dias ? ` <span class="ficha-etapa-dias">· ${escapeHtml(dias)}</span>` : ''}</div>
@@ -127,7 +127,7 @@ async function renderFichaEspecie(id, root) {
       <div class="view-header view-header-compacto">
         <a href="#/biblioteca" class="volver-link">‹ Biblioteca</a>
       </div>
-      <div class="empty-state"><span class="emoji">🔍</span>Todavía no hay una ficha para esta especie.</div>
+      <div class="empty-state">${renderIcon('buscar', { scale: 'xl', className: 'icon-bloque' })}Todavía no hay una ficha para esta especie.</div>
     `;
     return;
   }
@@ -157,7 +157,7 @@ async function renderFichaEspecie(id, root) {
         <div class="detalle-badges">
           <span class="badge">${escapeHtml(identidad.familia)}</span>
           <span class="badge tierra">${escapeHtml(etiquetaTipoSeguimiento(identidad.tipoSeguimiento))}</span>
-          ${origen && origen.estatus === 'nativa' ? `<span class="badge nativa">${renderIcon('especie-nativa', { size: 14 })} Nativa</span>` : ''}
+          ${origen && origen.estatus === 'nativa' ? `<span class="badge nativa">${renderIcon('especie-nativa', { scale: 'xs' })} Nativa</span>` : ''}
         </div>
       </div>
     </div>
@@ -176,12 +176,12 @@ async function renderFichaEspecie(id, root) {
     </section>
 
     <section class="ficha-seccion">
-      <div class="section-title">Siembra 🌱</div>
-      ${filaDato('🌱', 'Método habitual', siembra.metodoPreferido)}
+      <div class="section-title">${renderIcon('siembra', { scale: 'xs' })} Siembra</div>
+      ${filaDato(renderIcon('siembra', { scale: 'xs' }), 'Método habitual', siembra.metodoPreferido)}
       ${filaDato('📏', 'Profundidad', formatRango(siembra.profundidadCm, ' cm'))}
       ${filaDato('⏳', 'Germinación aproximada', formatRango(siembra.germinacionDias, ' días'))}
       ${filaDato('🌡️', 'Temperatura favorable', siembra.temperaturaGerminacion && siembra.temperaturaGerminacion.ideal ? formatRango(siembra.temperaturaGerminacion.ideal, ' °C') : null)}
-      ${siembra.trasplante && siembra.trasplante.recomendado ? filaDato('🪴', 'Trasplante', formatRango(siembra.trasplante.diasOrientativos, ' días después de sembrar')) : ''}
+      ${siembra.trasplante && siembra.trasplante.recomendado ? filaDato(renderIcon('trasplante', { scale: 'xs' }), 'Trasplante', formatRango(siembra.trasplante.diasOrientativos, ' días después de sembrar')) : ''}
       ${ventana ? `
         <div class="ficha-calendario-nota">
           <span class="ficha-fila-icono">🗓️</span>
@@ -209,8 +209,8 @@ async function renderFichaEspecie(id, root) {
       <div class="section-title">Cultivo</div>
       ${filaDato('📐', 'Distancia entre plantas', formatRango(manejo.distanciaCm, ' cm'))}
       ${filaDato('🪵', 'Tutorado', manejo.tutorado)}
-      ${filaDato('✂️', 'Poda', manejo.poda)}
-      ${filaDato('🍂', 'Cobertura de suelo', manejo.coberturaSuelo)}
+      ${filaDato(renderIcon('poda', { scale: 'xs' }), 'Poda', manejo.poda)}
+      ${filaDato(renderIcon('cobertura-suelo', { scale: 'xs' }), 'Cobertura de suelo', manejo.coberturaSuelo)}
     </section>
 
     <section class="ficha-seccion">
@@ -219,8 +219,8 @@ async function renderFichaEspecie(id, root) {
     </section>
 
     <section class="ficha-seccion">
-      <div class="section-title">Cosecha 🧺</div>
-      ${filaDato('🧺', 'Tipo', cosecha.tipo)}
+      <div class="section-title">${renderIcon('cosecha', { scale: 'xs' })} Cosecha</div>
+      ${filaDato(renderIcon('cosecha', { scale: 'xs' }), 'Tipo', cosecha.tipo)}
       ${cosecha.indicadoresMadurez && cosecha.indicadoresMadurez.length ? `
         <div class="ficha-fila">
           <span class="ficha-fila-icono">✅</span>

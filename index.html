@@ -24,11 +24,11 @@
 </header>
 
 <div id="menu-panel" class="menu-panel hidden">
-  <button id="btn-export" class="menu-item">⬇️ Exportar respaldo</button>
-  <label class="menu-item" for="input-import">⬆️ Importar respaldo</label>
+  <button id="btn-export" class="menu-item">Exportar respaldo</button>
+  <label class="menu-item" for="input-import">Importar respaldo</label>
   <input type="file" id="input-import" accept="application/json" hidden />
   <button id="btn-banco" class="menu-item"></button>
-  <button id="btn-configuracion" class="menu-item">⚙️ Configuración</button>
+  <button id="btn-configuracion" class="menu-item">Configuración</button>
 </div>
 
 <main id="app" class="app-view"></main>
@@ -98,12 +98,12 @@
   // el resto de la app (vistas que se re-renderizan solas) cada vista
   // arma su propio innerHTML con renderIcon() adentro del template, sin
   // necesitar este paso aparte.
-  document.getElementById('btn-menu').innerHTML = renderIcon('mas', { size: 22 });
-  document.getElementById('btn-banco').innerHTML = `${renderIcon('banco', { size: 18 })} Banco`;
-  document.querySelector('#bottom-nav [data-nav="inicio"] .nav-icon').innerHTML = renderIcon('inicio', { size: 22 });
-  document.querySelector('#bottom-nav [data-nav="cultivos"] .nav-icon').innerHTML = renderIcon('cultivos', { size: 22 });
-  document.querySelector('#bottom-nav [data-nav="biblioteca"] .nav-icon').innerHTML = renderIcon('biblioteca', { size: 22 });
-  document.querySelector('#nav-registrar .nav-icon').innerHTML = renderIcon('registrar', { size: 20 });
+  document.getElementById('btn-menu').innerHTML = renderIcon('mas', { scale: 'lg' });
+  document.getElementById('btn-banco').innerHTML = `${renderIcon('banco', { scale: 'sm' })} Banco`;
+  document.querySelector('#bottom-nav [data-nav="inicio"] .nav-icon').innerHTML = renderIcon('inicio', { scale: 'lg' });
+  document.querySelector('#bottom-nav [data-nav="cultivos"] .nav-icon').innerHTML = renderIcon('cultivos', { scale: 'lg' });
+  document.querySelector('#bottom-nav [data-nav="biblioteca"] .nav-icon').innerHTML = renderIcon('biblioteca', { scale: 'lg' });
+  document.querySelector('#nav-registrar .nav-icon').innerHTML = renderIcon('registrar', { scale: 'md' });
 
   // Menú de exportación / importación
   document.getElementById('btn-menu').addEventListener('click', () => {

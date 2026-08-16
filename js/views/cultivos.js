@@ -16,7 +16,7 @@ async function renderCultivoCardHtml(cultivo) {
   return `
     <div class="cultivo-card" data-id="${cultivo.id}">
       <div class="cultivo-card-photo" style="${fotoUrl ? `background-image:url('${fotoUrl}')` : ''}">
-        ${fotoUrl ? '' : '🌿'}
+        ${fotoUrl ? '' : renderIcon('cultivos', { scale: 'xl' })}
       </div>
       <div class="cultivo-card-body">
         <div class="cultivo-card-especie">${escapeHtml(cultivo.especie)}</div>
@@ -34,9 +34,9 @@ async function renderCultivos(root) {
 
   root.innerHTML = `
     <div class="view-header">
-      <h1>Mis cultivos</h1>
+      <h1>${renderIcon('cultivos', { scale: 'lg' })} Mis cultivos</h1>
       <p>${cultivos.length} registrado${cultivos.length === 1 ? '' : 's'}</p>
-      <a href="#/espacios" class="link-ver-todas">${renderIcon('espacios', { size: 16 })} Ver espacios</a>
+      <a href="#/espacios" class="link-ver-todas">${renderIcon('espacios', { scale: 'xs' })} Ver espacios</a>
     </div>
     <div class="filter-tabs">
       <div class="filter-tab active" data-filter="activo">Activos</div>
@@ -55,7 +55,7 @@ async function renderCultivos(root) {
     if (filter === 'finalizado') filtered = cultivos.filter((c) => c.estado === 'finalizado');
 
     if (!filtered.length) {
-      list.innerHTML = `<div class="empty-state"><span class="emoji">🌱</span>No hay cultivos en esta categoría.</div>`;
+      list.innerHTML = `<div class="empty-state">${renderIcon('cultivos', { scale: 'xl', className: 'icon-bloque' })}No hay cultivos en esta categoría.</div>`;
       return;
     }
     const cards = await Promise.all(filtered.map((c) => renderCultivoCardHtml(c)));

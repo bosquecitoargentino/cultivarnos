@@ -14,7 +14,7 @@ async function renderEspacios(root) {
 
   root.innerHTML = `
     <div class="view-header">
-      <h1>${renderIcon('espacios', { size: 22 })} Espacios</h1>
+      <h1>${renderIcon('espacios', { scale: 'lg' })} Espacios</h1>
       <p>Tu huerta, vista por lugar.</p>
     </div>
     <div id="espacios-list"></div>
@@ -22,13 +22,13 @@ async function renderEspacios(root) {
 
   const list = root.querySelector('#espacios-list');
   if (!espacios.length) {
-    list.innerHTML = `<div class="empty-state"><span class="emoji">📍</span>Todavía no hay cultivos activos con una ubicación registrada.</div>`;
+    list.innerHTML = `<div class="empty-state">${renderIcon('espacios', { scale: 'xl', className: 'icon-bloque' })}Todavía no hay cultivos activos con una ubicación registrada.</div>`;
     return;
   }
 
   const claveSemillero = claveUbicacion('Semillero');
   list.innerHTML = `<div class="cultivos-grid">${espacios.map((e) => {
-    const icono = e.clave === claveSemillero ? '🌱' : '📍';
+    const icono = renderIcon(e.clave === claveSemillero ? 'siembra' : 'espacios', { scale: 'xs' });
     const partes = [];
     if (e.totalCantidad != null) partes.push(`${e.totalCantidad} planta${e.totalCantidad === 1 ? '' : 's'}`);
     partes.push(`${e.cantidadCultivos} cultivo${e.cantidadCultivos === 1 ? '' : 's'}`);
@@ -56,7 +56,7 @@ async function renderEspacioDetalle(clave, root) {
       <div class="view-header view-header-compacto">
         <a href="#/espacios" class="volver-link">‹ Espacios</a>
       </div>
-      <div class="empty-state"><span class="emoji">🔍</span>No se encontró este espacio.</div>
+      <div class="empty-state">${renderIcon('buscar', { scale: 'xl', className: 'icon-bloque' })}No se encontró este espacio.</div>
     `;
     return;
   }

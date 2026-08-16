@@ -31,7 +31,7 @@ async function renderBancoDetalle(id, root) {
       <div class="view-header view-header-compacto">
         <a href="#/banco" class="volver-link">‹ Banco</a>
       </div>
-      <div class="empty-state"><span class="emoji">🌰</span>Este lote ya no existe.</div>
+      <div class="empty-state">${renderIcon('buscar', { scale: 'xl', className: 'icon-bloque' })}Este lote ya no existe.</div>
     `;
     return;
   }
@@ -87,7 +87,7 @@ async function renderBancoDetalle(id, root) {
       ` : ''}
     </section>
 
-    <button type="button" id="btn-editar-lote" class="btn-secondary" style="margin-top:8px;">${renderIcon('editar', { size: 18 })} Editar</button>
+    <button type="button" id="btn-editar-lote" class="btn-secondary" style="margin-top:8px;">${renderIcon('editar', { scale: 'sm' })} Editar</button>
     <button type="button" id="btn-eliminar-lote" class="btn-danger" style="margin-top:8px;">Eliminar lote</button>
   `;
 
@@ -188,7 +188,7 @@ function abrirModalEditarLote(lote, onDone) {
         <label class="form-label">Fotografía <span class="optional">(opcional)</span></label>
         <div class="photo-picker" id="edit-photo-picker" role="button" tabindex="0" aria-label="Agregar fotografía">
           <span class="photo-picker-placeholder">
-            <span class="emoji">📷</span>
+            ${renderIcon('foto', { scale: 'xl' })}
             <span>Tocá para agregar una foto</span>
           </span>
           <button type="button" class="remove-photo hidden" id="edit-photo-remove">✕</button>

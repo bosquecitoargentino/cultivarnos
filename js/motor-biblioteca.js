@@ -21,14 +21,21 @@ const CATEGORIAS_BIBLIOTECA = [
   { id: 'aromatica', label: 'Aromáticas' },
   { id: 'servicio', label: 'Servicio' },
   { id: 'agroforestal', label: 'Agroforestales' },
-  { id: 'flor', label: '🌸 Flores' },
+  { id: 'flor', label: 'Flores' },
   // Nativas NO es una categoría botánica más (una especie nativa puede ser
   // a la vez "fruto", "aromática", "agroforestal", etc.) — es un corte
   // transversal sobre el mismo listado, derivado de especie.origen.estatus.
   // Se resuelve con un caso especial en filtrarBiblioteca() en vez de
   // agregar 'nativa' a identidad.categorias de cada especie, para no
   // duplicar esa información en dos lugares distintos.
-  { id: 'nativas', label: '🌿 Nativas' },
+  //
+  // `label` queda en texto plano acá a propósito (igual que el resto de
+  // las categorías): el ícono de este chip puntual (el único de los 9 que
+  // tiene uno — "especie-nativa" calza justo con este corte transversal)
+  // se agrega en views/biblioteca.js al armar el chip, no acá — así este
+  // campo se puede seguir usando como texto simple en cualquier otro
+  // lugar que lo lea (ver ficha-especie.js) sin arrastrar HTML adentro.
+  { id: 'nativas', label: 'Nativas' },
 ];
 
 function listarEspeciesBiblioteca() {

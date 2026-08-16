@@ -36,7 +36,7 @@ async function renderInicio(root) {
     </div>
 
     <section class="acciones-rapidas">
-      <button id="btn-obs-principal" class="btn-primary btn-obs-principal">👁 Registrar observación</button>
+      <button id="btn-obs-principal" class="btn-primary btn-obs-principal">${renderIcon('observacion', { scale: 'sm' })} Registrar observación</button>
       <a href="#/nuevo" class="link-nuevo-cultivo">＋ Nuevo cultivo</a>
     </section>
 
@@ -107,7 +107,7 @@ async function renderInicio(root) {
   // Tus cultivos
   const activosList = root.querySelector('#activos-list');
   if (!activos.length) {
-    activosList.innerHTML = `<div class="empty-state"><span class="emoji">🌱</span>Todavía no registraste cultivos.</div>`;
+    activosList.innerHTML = `<div class="empty-state">${renderIcon('cultivos', { scale: 'xl', className: 'icon-bloque' })}Todavía no registraste cultivos.</div>`;
   } else {
     const cards = await Promise.all(activos.slice(0, 6).map((c) => renderCultivoCardHtml(c)));
     activosList.innerHTML = `<div class="cultivos-grid">${cards.join('')}</div>`;
@@ -121,7 +121,7 @@ async function renderInicio(root) {
   const temporadaSection = root.querySelector('#temporada-section');
   if (!config.hemisferio) {
     temporadaSection.innerHTML = `
-      <div class="section-title">Esta temporada 🌱</div>
+      <div class="section-title">${renderIcon('siembra', { scale: 'xs' })} Esta temporada</div>
       <div class="temporada-prompt">
         <span>Configurá tu hemisferio para ver qué podés sembrar ahora.</span>
         <a href="#/configuracion" class="link-small">Configurar</a>
@@ -132,13 +132,13 @@ async function renderInicio(root) {
     const recomendaciones = obtenerRecomendacionesTemporada(config.hemisferio, mesActual);
     if (!recomendaciones.length) {
       temporadaSection.innerHTML = `
-        <div class="section-title">Esta temporada 🌱</div>
+        <div class="section-title">${renderIcon('siembra', { scale: 'xs' })} Esta temporada</div>
         <p class="fotos-vacio">Este mes no hay siembras típicas para arrancar.</p>
         <a href="#/calendario" class="link-ver-todas">Ver calendario →</a>
       `;
     } else {
       temporadaSection.innerHTML = `
-        <div class="section-title">Esta temporada 🌱</div>
+        <div class="section-title">${renderIcon('siembra', { scale: 'xs' })} Esta temporada</div>
         <div class="temporada-list">
           ${recomendaciones
             .map(
@@ -179,7 +179,7 @@ async function openObservacionRapida(cultivos) {
       const fotoUrl = await obtenerImagenCultivo(c, eventosCultivo);
       return `
         <button type="button" class="cultivo-pick-item" data-id="${c.id}" data-especie="${escapeHtml(c.especie)}">
-          <span class="cultivo-pick-thumb" style="${fotoUrl ? `background-image:url('${fotoUrl}')` : ''}">${fotoUrl ? '' : '🌿'}</span>
+          <span class="cultivo-pick-thumb" style="${fotoUrl ? `background-image:url('${fotoUrl}')` : ''}">${fotoUrl ? '' : renderIcon('cultivos', { scale: 'xl' })}</span>
           <span class="cultivo-pick-info">
             <span class="cultivo-pick-especie">${escapeHtml(c.especie)}</span>
             ${c.variedad ? `<span class="cultivo-pick-variedad">${escapeHtml(c.variedad)}</span>` : ''}
@@ -215,7 +215,7 @@ function renderObservacionPaso2(backdrop, close, cultivoId, especieLabel) {
     <h2>${escapeHtml(especieLabel)}</h2>
     <div class="form-group">
       <div class="photo-picker-compacta" id="obs-photo-picker" role="button" tabindex="0" aria-label="Tomar foto">
-        <span class="ppc-thumb" id="obs-photo-thumb"><span class="emoji">📷</span></span>
+        <span class="ppc-thumb" id="obs-photo-thumb">${renderIcon('foto', { scale: 'lg' })}</span>
         <span class="ppc-label" id="obs-photo-label">Tomar foto</span>
         <button type="button" class="remove-photo hidden" id="obs-photo-remove" aria-label="Quitar foto">✕</button>
       </div>
@@ -270,7 +270,7 @@ function renderObservacionPaso2(backdrop, close, cultivoId, especieLabel) {
     previewUrl = null;
     fotoInput.value = '';
     photoThumb.style.backgroundImage = '';
-    photoThumb.innerHTML = '<span class="emoji">📷</span>';
+    photoThumb.innerHTML = renderIcon('foto', { scale: 'lg' });
     photoLabel.textContent = 'Tomar foto';
     photoPicker.classList.remove('has-photo');
     photoRemoveBtn.classList.add('hidden');

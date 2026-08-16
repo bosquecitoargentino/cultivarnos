@@ -8,7 +8,7 @@ function renderNuevo(root, queryString) {
 
   root.innerHTML = `
     <div class="view-header">
-      <h1>Nuevo cultivo</h1>
+      <h1>${renderIcon('registrar', { scale: 'lg' })} Nuevo cultivo</h1>
       <p>Registrá lo esencial. Podés sumar más detalles después.</p>
     </div>
 
@@ -56,7 +56,7 @@ function renderNuevo(root, queryString) {
         <label class="form-label">Fotografía <span class="optional">(opcional)</span></label>
         <div class="photo-picker" id="f-photo-picker" role="button" tabindex="0" aria-label="Agregar fotografía">
           <span class="photo-picker-placeholder">
-            <span class="emoji">📷</span>
+            ${renderIcon('foto', { scale: 'xl' })}
             <span>Tocá para agregar una foto</span>
           </span>
           <button type="button" class="remove-photo hidden" id="f-photo-remove">✕</button>
@@ -288,7 +288,7 @@ function renderNuevo(root, queryString) {
 function mostrarSeguimientoSugerido(root, cultivoId, especie, sugerencia) {
   root.innerHTML = `
     <div class="creado-confirmacion">
-      <div class="creado-icono">🌱</div>
+      <div class="creado-icono">${renderIcon('registrar', { scale: 'xl' })}</div>
       <div class="creado-titulo">${escapeHtml(especie)} registrado</div>
       <div class="observar-oferta creado-oferta">
         <span>Seguimiento sugerido: ${escapeHtml(sugerencia.titulo)} · dentro de ${sugerencia.dias} días</span>

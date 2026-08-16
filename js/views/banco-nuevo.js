@@ -20,7 +20,7 @@ function renderBancoNuevo(root, queryString) {
 
   root.innerHTML = `
     <div class="view-header view-header-compacto">
-      <h1>+ Agregar al Banco</h1>
+      <h1>${renderIcon('registrar', { scale: 'lg' })} Agregar al Banco</h1>
       <p>Registrá lo esencial. Podés sumar más detalles después.</p>
     </div>
 
@@ -92,7 +92,7 @@ function renderBancoNuevo(root, queryString) {
           <label class="form-label">Fotografía <span class="optional">(opcional)</span></label>
           <div class="photo-picker" id="f-photo-picker" role="button" tabindex="0" aria-label="Agregar fotografía">
             <span class="photo-picker-placeholder">
-              <span class="emoji">📷</span>
+              ${renderIcon('foto', { scale: 'xl' })}
               <span>Tocá para agregar una foto</span>
             </span>
             <button type="button" class="remove-photo hidden" id="f-photo-remove">✕</button>

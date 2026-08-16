@@ -4,7 +4,7 @@ async function renderDetalle(id, root) {
   root = root || APP_ROOT;
   const cultivo = await DB.getCultivo(id);
   if (!cultivo) {
-    root.innerHTML = `<div class="empty-state"><span class="emoji">🔍</span>No se encontró el cultivo.</div>`;
+    root.innerHTML = `<div class="empty-state">${renderIcon('buscar', { scale: 'xl', className: 'icon-bloque' })}No se encontró el cultivo.</div>`;
     return;
   }
 
@@ -62,7 +62,7 @@ async function renderDetalle(id, root) {
   root.innerHTML = `
     <div class="detalle-hero">
       <div class="detalle-hero-photo" style="${fotoUrl ? `background-image:url('${fotoUrl}')` : ''}">
-        ${fotoUrl ? '' : '🌿'}
+        ${fotoUrl ? '' : renderIcon('cultivos', { scale: 'xl' })}
       </div>
       <div class="detalle-hero-body">
         <div class="detalle-especie">${escapeHtml(cultivo.especie)}</div>
@@ -74,15 +74,15 @@ async function renderDetalle(id, root) {
           ${cultivo.estado === 'finalizado' ? `<span class="badge finalizado">Finalizado</span>` : ''}
         </div>
         ${cultivo.nota ? `<div class="detalle-nota">${escapeHtml(cultivo.nota)}</div>` : ''}
-        ${especieEnBiblioteca ? `<a href="#/biblioteca/${especieEnBiblioteca.id}" class="detalle-link-biblioteca">${renderIcon('biblioteca', { size: 16 })} Ver ficha de la especie</a>` : ''}
+        ${especieEnBiblioteca ? `<a href="#/biblioteca/${especieEnBiblioteca.id}" class="detalle-link-biblioteca">${renderIcon('biblioteca', { scale: 'xs' })} Ver ficha de la especie</a>` : ''}
       </div>
     </div>
 
     <div class="detalle-actions">
-      <button id="btn-add-evento">${renderIcon('registrar', { size: 18 })} Evento</button>
-      <button id="btn-add-recordatorio">${renderIcon('recordatorio', { size: 18 })} Recordatorio</button>
-      <button id="btn-editar-cultivo">${renderIcon('editar', { size: 18 })} Editar</button>
-      <button id="btn-toggle-estado">${cultivo.estado === 'finalizado' ? '↩️ Reactivar' : `${renderIcon('ciclo', { size: 18 })} Finalizar`}</button>
+      <button id="btn-add-evento">${renderIcon('registrar', { scale: 'sm' })} Evento</button>
+      <button id="btn-add-recordatorio">${renderIcon('recordatorio', { scale: 'sm' })} Recordatorio</button>
+      <button id="btn-editar-cultivo">${renderIcon('editar', { scale: 'sm' })} Editar</button>
+      <button id="btn-toggle-estado">${renderIcon('ciclo', { scale: 'sm' })} ${cultivo.estado === 'finalizado' ? 'Reactivar' : 'Finalizar'}</button>
     </div>
 
     ${cultivo.estado === 'finalizado' ? `<section id="ciclo-completado-section"></section>` : ''}
@@ -209,7 +209,7 @@ async function renderDetalle(id, root) {
   // Timeline
   const timelineWrap = root.querySelector('#timeline');
   if (!eventos.length) {
-    timelineWrap.innerHTML = `<div class="empty-state"><span class="emoji">📖</span>Todavía no hay eventos registrados.</div>`;
+    timelineWrap.innerHTML = `<div class="empty-state">${renderIcon('registrar', { scale: 'xl', className: 'icon-bloque' })}Todavía no hay eventos registrados.</div>`;
   } else {
     const items = await Promise.all(eventos.map((ev) => renderTimelineItem(ev, fotos, anotacionesSiembra, resumenSiembra)));
     timelineWrap.innerHTML = `<div class="timeline">${items.join('')}</div>`;
@@ -408,7 +408,7 @@ function pintarSeguimientoSiembra(wrap, cultivo, resumen, onChange) {
       <div class="distribucion-lista">
         ${resumen.distribucion.map((d) => `
           <div class="distribucion-fila">
-            <span class="distribucion-icono">${d.tipo === 'origen' ? '🌱' : '📍'}</span>
+            <span class="distribucion-icono">${renderIcon(d.tipo === 'origen' ? 'siembra' : 'espacios', { scale: 'xs' })}</span>
             <span class="distribucion-ubicacion">${escapeHtml(d.ubicacion)}</span>
             <span class="distribucion-cantidad">${d.cantidad}</span>
           </div>
@@ -419,9 +419,9 @@ function pintarSeguimientoSiembra(wrap, cultivo, resumen, onChange) {
 
   wrap.innerHTML = `
     <div class="siembra-card">
-      <div class="siembra-card-titulo">Seguimiento de siembra 🌱</div>
+      <div class="siembra-card-titulo">${renderIcon('siembra', { scale: 'xs' })} Seguimiento de siembra</div>
       ${resumen.todoTrasplantado
-        ? `<p class="siembra-todo-trasplantado">🌱 Todo el lote germinado ya pasó a lugar definitivo.</p>`
+        ? `<p class="siembra-todo-trasplantado">${renderIcon('trasplante', { scale: 'xs' })} Todo el lote germinado ya pasó a lugar definitivo.</p>`
         : `<div class="siembra-tiles">${tiles.map((t) => `
             <div class="siembra-tile">
               <div class="siembra-tile-valor">${escapeHtml(String(t.valor))}</div>
@@ -469,7 +469,7 @@ function pintarProduccion(wrap, resumen) {
 
   wrap.innerHTML = `
     <div class="siembra-card">
-      <div class="siembra-card-titulo">Producción 🍅</div>
+      <div class="siembra-card-titulo">${renderIcon('cosecha', { scale: 'xs' })} Producción</div>
       <div class="siembra-tiles">
         ${tiles.map((t) => `
           <div class="siembra-tile">
@@ -498,18 +498,18 @@ function pintarCicloCompletado(wrap, cultivo, resumen) {
 
   wrap.innerHTML = `
     <div class="siembra-card">
-      <div class="siembra-card-titulo">Ciclo completado 🌱</div>
+      <div class="siembra-card-titulo">${renderIcon('ciclo', { scale: 'xs' })} Ciclo completado</div>
       <p class="siembra-modal-info">${[fin ? `${inicio} → ${fin}` : inicio, diasTxt].filter(Boolean).join(' · ')}</p>
       ${fin_ && fin_.motivoLabel ? `<span class="badge finalizado">${escapeHtml(fin_.motivoLabel)}</span>` : ''}
       ${indicadores.length ? `
       <div class="detalle-badges" style="margin-top:10px;">
-        ${indicadores.map((i) => `<span class="badge">${i.iconSvg ? renderIcon(i.iconSvg, { size: 14 }) : i.icon} ${escapeHtml(i.texto)}</span>`).join('')}
+        ${indicadores.map((i) => `<span class="badge">${i.iconSvg ? renderIcon(i.iconSvg, { scale: 'xs' }) : i.icon} ${escapeHtml(i.texto)}</span>`).join('')}
       </div>` : ''}
       ${fin_ && fin_.nota ? `
       <div class="detalle-nota" style="margin-top:10px;">
         <strong>Lo que me deja este cultivo</strong><br />${escapeHtml(fin_.nota)}
       </div>` : ''}
-      <button type="button" id="btn-compartir-resumen" class="btn-secondary" style="margin-top:14px;">${renderIcon('compartir', { size: 18 })} Compartir resumen</button>
+      <button type="button" id="btn-compartir-resumen" class="btn-secondary" style="margin-top:14px;">${renderIcon('compartir', { scale: 'sm' })} Compartir resumen</button>
     </div>
   `;
 
@@ -999,7 +999,7 @@ function abrirSugerenciaRecordatorioStandalone(cultivoId, sugerencia, onDone) {
     <div class="modal-sheet">
       <div class="modal-close-row"><button id="modal-close">✕</button></div>
       <div class="sugerencia-evento">
-        <div class="sugerencia-evento-icono">🌱</div>
+        <div class="sugerencia-evento-icono">${renderIcon('recordatorio', { scale: 'xl' })}</div>
         <div class="sugerencia-evento-texto">¿Querés que te recuerde<br /><strong>"${escapeHtml(sugerencia.titulo)}"</strong><br />en ${sugerencia.dias} días?</div>
         <div class="sugerencia-evento-botones">
           <button type="button" id="sugerencia-si" class="btn-primary">Sí, recordarme</button>
@@ -1035,7 +1035,7 @@ function abrirSugerenciaRecordatorioStandalone(cultivoId, sugerencia, onDone) {
 function pintarSugerenciaObservacion(wrap, cultivo, eventos, config, onDone) {
   function pintarBoton() {
     wrap.innerHTML = `
-      <button type="button" id="btn-recibir-sugerencia" class="link-ver-todas">🌱 Recibir una sugerencia</button>
+      <button type="button" id="btn-recibir-sugerencia" class="link-ver-todas">${renderIcon('observacion', { scale: 'xs' })} Recibir una sugerencia</button>
     `;
     wrap.querySelector('#btn-recibir-sugerencia').addEventListener('click', () => mostrarSugerencia([]));
   }
@@ -1100,7 +1100,7 @@ async function renderGaleriaFotos(cultivoId, root) {
   root = root || APP_ROOT;
   const cultivo = await DB.getCultivo(cultivoId);
   if (!cultivo) {
-    root.innerHTML = `<div class="empty-state"><span class="emoji">🔍</span>No se encontró el cultivo.</div>`;
+    root.innerHTML = `<div class="empty-state">${renderIcon('buscar', { scale: 'xl', className: 'icon-bloque' })}No se encontró el cultivo.</div>`;
     return;
   }
   const fotos = await DB.getFotosByCultivo(cultivoId);
@@ -1108,7 +1108,7 @@ async function renderGaleriaFotos(cultivoId, root) {
   root.innerHTML = `
     <div class="view-header view-header-compacto">
       <a href="#/cultivo/${cultivoId}" class="volver-link">‹ ${escapeHtml(cultivo.especie)}</a>
-      <h1>Fotos</h1>
+      <h1>${renderIcon('foto', { scale: 'lg' })} Fotos</h1>
       <p>${fotos.length} fotografía${fotos.length === 1 ? '' : 's'}</p>
     </div>
     <div id="fotos-grid-completo"></div>
@@ -1186,7 +1186,7 @@ function openEventoModal(cultivoId, onSaved, opts) {
       <div class="form-group">
         <label class="form-label">Tipo</label>
         <div class="chip-group" id="ev-tipo">
-          ${EVENTO_TIPOS.filter((t) => t.value !== 'finalizacion' && t.value !== 'reactivacion').map((t) => `<div class="chip-option ${t.value === tipoSeleccionado ? 'selected' : ''}" data-value="${t.value}">${t.iconSvg ? renderIcon(t.iconSvg, { size: 16 }) : t.icon} ${t.label}</div>`).join('')}
+          ${EVENTO_TIPOS.filter((t) => t.value !== 'finalizacion' && t.value !== 'reactivacion').map((t) => `<div class="chip-option ${t.value === tipoSeleccionado ? 'selected' : ''}" data-value="${t.value}">${t.iconSvg ? renderIcon(t.iconSvg, { scale: 'xs' }) : t.icon} ${t.label}</div>`).join('')}
         </div>
       </div>
       `}
@@ -1213,7 +1213,7 @@ function openEventoModal(cultivoId, onSaved, opts) {
         <label class="form-label">Foto <span class="optional">(opcional)</span></label>
         <div class="photo-picker" id="ev-photo-picker" role="button" tabindex="0" aria-label="Agregar fotografía">
           <span class="photo-picker-placeholder">
-            <span class="emoji">📷</span>
+            ${renderIcon('foto', { scale: 'xl' })}
             <span>Tocá para agregar una foto</span>
           </span>
           <button type="button" class="remove-photo hidden" id="ev-photo-remove">✕</button>
@@ -1427,7 +1427,7 @@ function mostrarSugerenciaRecordatorioEnModal(backdrop, sugerencia, cultivoId, o
   sheet.innerHTML = `
     <div class="modal-close-row"><button id="modal-close">✕</button></div>
     <div class="sugerencia-evento">
-      <div class="sugerencia-evento-icono">🌱</div>
+      <div class="sugerencia-evento-icono">${renderIcon('recordatorio', { scale: 'xl' })}</div>
       <div class="sugerencia-evento-texto">Evento registrado. ¿Querés que te recuerde<br /><strong>"${escapeHtml(sugerencia.titulo)}"</strong><br />en ${sugerencia.dias} días?</div>
       <div class="sugerencia-evento-botones">
         <button type="button" id="sugerencia-si" class="btn-primary">Sí, recordarme</button>

@@ -18,7 +18,7 @@ async function renderConfiguracion(root) {
         <div class="chip-option ${config.hemisferio === 'sur' ? 'selected' : ''}" data-value="sur">Sur</div>
         <div class="chip-option ${config.hemisferio === 'norte' ? 'selected' : ''}" data-value="norte">Norte</div>
       </div>
-      <button type="button" id="config-geo-btn" class="btn-secondary" style="margin-top:12px;">📍 Usar mi ubicación</button>
+      <button type="button" id="config-geo-btn" class="btn-secondary" style="margin-top:12px;">Usar mi ubicación</button>
       <p class="config-geo-estado" id="config-geo-estado">${textoEstadoUbicacion(config)}</p>
     </section>
 
@@ -28,9 +28,9 @@ async function renderConfiguracion(root) {
 
     <section>
       <div class="section-title">Datos y respaldo</div>
-      <button type="button" id="config-btn-export" class="btn-secondary">⬇️ Exportar respaldo</button>
+      <button type="button" id="config-btn-export" class="btn-secondary">Exportar respaldo</button>
       <p class="config-respaldo-fecha" id="config-respaldo-fecha">${textoUltimoRespaldo(config)}</p>
-      <label class="link-small config-import-link" for="config-input-import">⬆️ Importar respaldo</label>
+      <label class="link-small config-import-link" for="config-input-import">Importar respaldo</label>
       <input type="file" id="config-input-import" accept="application/json" hidden />
     </section>
 

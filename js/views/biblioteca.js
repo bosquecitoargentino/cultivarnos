@@ -13,7 +13,7 @@ function especieCardHtml(especie) {
     <div class="especie-card" data-id="${id}">
       <div class="especie-card-photo" style="${visual.imagen ? `background-image:url('${visual.imagen}')` : ''}">
         ${visual.imagen ? '' : (visual.icono || '🌿')}
-        ${esNativa ? '<span class="especie-card-nativa" title="Especie nativa">🌿</span>' : ''}
+        ${esNativa ? `<span class="especie-card-nativa" title="Especie nativa">${renderIcon('especie-nativa', { scale: 'xs' })}</span>` : ''}
       </div>
       <div class="especie-card-body">
         <div class="especie-card-nombre">${escapeHtml(identidad.nombre)}</div>
@@ -27,14 +27,14 @@ function especieCardHtml(especie) {
 async function renderBiblioteca(root) {
   root.innerHTML = `
     <div class="view-header view-header-compacto">
-      <h1>Biblioteca</h1>
+      <h1>${renderIcon('biblioteca', { scale: 'lg' })} Biblioteca</h1>
       <p>Explorá especies y su información agronómica, aunque todavía no las tengas registradas.</p>
     </div>
     <div class="biblioteca-buscador">
       <input type="text" id="bib-buscar" class="form-input" placeholder="Buscar tomate, rúcula, papa..." autocomplete="off" />
     </div>
     <div class="chip-group biblioteca-categorias" id="bib-categorias">
-      ${CATEGORIAS_BIBLIOTECA.map((c) => `<div class="chip-option ${c.id === 'todos' ? 'selected' : ''}" data-value="${c.id}">${escapeHtml(c.label)}</div>`).join('')}
+      ${CATEGORIAS_BIBLIOTECA.map((c) => `<div class="chip-option ${c.id === 'todos' ? 'selected' : ''}" data-value="${c.id}">${c.id === 'nativas' ? renderIcon('especie-nativa', { scale: 'xs' }) + ' ' : ''}${escapeHtml(c.label)}</div>`).join('')}
     </div>
     <div id="bib-resultados"></div>
   `;
@@ -47,7 +47,7 @@ async function renderBiblioteca(root) {
   function pintar() {
     const especies = filtrarBiblioteca(buscarInput.value, categoriaActual);
     if (!especies.length) {
-      resultados.innerHTML = `<div class="empty-state"><span class="emoji">🔍</span>No encontramos especies con esa búsqueda todavía.</div>`;
+      resultados.innerHTML = `<div class="empty-state">${renderIcon('buscar', { scale: 'xl', className: 'icon-bloque' })}No encontramos especies con esa búsqueda todavía.</div>`;
       return;
     }
     resultados.innerHTML = `<div class="especies-grid">${especies.map(especieCardHtml).join('')}</div>`;

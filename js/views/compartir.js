@@ -36,7 +36,7 @@ async function abrirCompartirResumen(cultivoId) {
       <div class="compartir-preview-wrap">
         <canvas id="compartir-preview" class="compartir-preview"></canvas>
       </div>
-      ${fotosReales.length ? `<button type="button" id="compartir-elegir-foto" class="link-ver-todas">${renderIcon('foto', { size: 16 })} Elegir foto</button>
+      ${fotosReales.length ? `<button type="button" id="compartir-elegir-foto" class="link-ver-todas">${renderIcon('foto', { scale: 'xs' })} Elegir foto</button>
       <div class="compartir-foto-grid hidden" id="compartir-foto-grid"></div>` : ''}
       ${tieneReflexion ? `
       <div class="form-group">

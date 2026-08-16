@@ -39,7 +39,7 @@ function loteGrupoHtml(grupo) {
 async function renderBanco(root) {
   root.innerHTML = `
     <div class="view-header view-header-compacto">
-      <h1>${renderIcon('banco', { size: 24 })} Banco</h1>
+      <h1>${renderIcon('banco', { scale: 'lg' })} Banco</h1>
       <p>Semillas, bulbos, rizomas y todo lo que tengas guardado para arrancar algo nuevo.</p>
     </div>
     <div class="biblioteca-buscador">
@@ -67,7 +67,7 @@ async function renderBanco(root) {
       contador.textContent = '';
       resultados.innerHTML = `
         <div class="empty-state">
-          ${renderIcon('banco', { size: 34, className: 'icon-bloque' })}
+          ${renderIcon('banco', { scale: 'xl', className: 'icon-bloque' })}
           Tu Banco está vacío<br />
           Registrá las semillas, bulbos, rizomas y otros materiales que tenés guardados para saber con qué contás cuando llegue el momento de cultivar.
         </div>
@@ -79,7 +79,7 @@ async function renderBanco(root) {
     contador.textContent = `${todosLosLotes.length} ${todosLosLotes.length === 1 ? 'lote' : 'lotes'}`;
 
     if (!filtrados.length) {
-      resultados.innerHTML = `<div class="empty-state"><span class="emoji">🔍</span>No encontramos lotes con esa búsqueda.</div>`;
+      resultados.innerHTML = `<div class="empty-state">${renderIcon('buscar', { scale: 'xl', className: 'icon-bloque' })}No encontramos lotes con esa búsqueda.</div>`;
       return;
     }
 
