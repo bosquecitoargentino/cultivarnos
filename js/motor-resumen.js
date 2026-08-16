@@ -122,29 +122,35 @@ function generarResumenCultivo(cultivo, eventos) {
 // decide cuántos de estos usar (la ficha puede mostrar todos los que
 // haya; la tarjeta compartible recorta a 4-6 para no sobrecargar el
 // diseño — ver motor-tarjeta.js).
+// `icon` (emoji) es el único campo que usa motor-tarjeta.js — dibuja
+// sobre <canvas>, que no puede pintar SVG, así que ese campo se queda tal
+// cual estaba. `iconSvg` es un campo NUEVO y opcional que solo agrega
+// detalle.js (DOM, sí puede pintar SVG) cuando arma los badges de "Ciclo
+// completado" — no reemplaza nada, así que motor-tarjeta.js no necesitó
+// ningún cambio para seguir funcionando exactamente igual.
 function elegirIndicadoresCiclo(resumen) {
   const items = [];
   if (resumen.siembra) {
-    items.push({ icon: '🌱', texto: `${resumen.siembra.sembradas} ${resumen.siembra.etiquetaCantidadInicial}` });
+    items.push({ icon: '🌱', iconSvg: 'siembra', texto: `${resumen.siembra.sembradas} ${resumen.siembra.etiquetaCantidadInicial}` });
     if (!resumen.siembra.sinGerminacion) {
       const pct = resumen.siembra.pctGerminacion != null ? ` · ${resumen.siembra.pctGerminacion}%` : '';
-      items.push({ icon: '🌿', texto: `${resumen.siembra.germinadas} germinadas${pct}` });
+      items.push({ icon: '🌿', iconSvg: 'germinacion', texto: `${resumen.siembra.germinadas} germinadas${pct}` });
     }
     if (resumen.siembra.trasplantadas > 0) {
-      items.push({ icon: '📍', texto: `${resumen.siembra.trasplantadas} trasplantadas` });
+      items.push({ icon: '📍', iconSvg: 'trasplante', texto: `${resumen.siembra.trasplantadas} trasplantadas` });
     }
     if (resumen.siembra.bajas > 0) {
       items.push({ icon: '❌', texto: `${resumen.siembra.bajas} baja${resumen.siembra.bajas === 1 ? '' : 's'}` });
     }
   }
   if (resumen.cosechas) {
-    items.push({ icon: '🍅', texto: `${resumen.cosechas.cantidad} cosecha${resumen.cosechas.cantidad === 1 ? '' : 's'}` });
+    items.push({ icon: '🍅', iconSvg: 'cosecha', texto: `${resumen.cosechas.cantidad} cosecha${resumen.cosechas.cantidad === 1 ? '' : 's'}` });
     if (resumen.cosechas.produccion.length && typeof formatearListaMediciones === 'function') {
       items.push({ icon: '⚖️', texto: `${formatearListaMediciones(resumen.cosechas.produccion)} cosechado${resumen.cosechas.produccion.length === 1 ? '' : 's'}` });
     }
   }
-  if (resumen.fotos > 0) items.push({ icon: '📷', texto: `${resumen.fotos} foto${resumen.fotos === 1 ? '' : 's'}` });
-  if (resumen.observaciones > 0) items.push({ icon: '👁️', texto: `${resumen.observaciones} observaci${resumen.observaciones === 1 ? 'ón' : 'ones'}` });
+  if (resumen.fotos > 0) items.push({ icon: '📷', iconSvg: 'foto', texto: `${resumen.fotos} foto${resumen.fotos === 1 ? '' : 's'}` });
+  if (resumen.observaciones > 0) items.push({ icon: '👁️', iconSvg: 'observacion', texto: `${resumen.observaciones} observaci${resumen.observaciones === 1 ? 'ón' : 'ones'}` });
   return items;
 }
 

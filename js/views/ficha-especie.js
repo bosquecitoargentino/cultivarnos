@@ -89,6 +89,12 @@ const ORDEN_ETAPAS_POR_TIPO = {
   agroforestal: ['establecimiento', 'crecimiento', 'formacion', 'manejo_estrato', 'poda', 'rebrote'],
 };
 
+// Solo estas 3 etapas de manejo ecológico tienen un ícono equivalente en
+// la lámina aprobada — el resto (germinación, floración, establecimiento,
+// etc.) se queda sin ícono acá a propósito, mismo criterio que el resto
+// del sistema: no forzar un ícono donde no hay uno que calce.
+const ICONO_ETAPA = { acumulacion_biomasa: 'biomasa', poda: 'poda', rebrote: 'rebrote' };
+
 function pintarEtapas(etapas) {
   if (!etapas) return '';
   const orden = ORDEN_ETAPAS_POR_TIPO[etapas.tipo]
@@ -100,9 +106,10 @@ function pintarEtapas(etapas) {
       const etapa = etapas[key];
       const dias = formatRango(etapa.diasOrientativos, ' días');
       const observar = (etapa.observar || []).slice(0, 2);
+      const icono = ICONO_ETAPA[key] ? `${renderIcon(ICONO_ETAPA[key], { size: 16, className: 'ficha-etapa-icono' })} ` : '';
       return `
         <div class="ficha-etapa">
-          <div class="ficha-etapa-titulo">${escapeHtml(ETIQUETA_ETAPA[key] || key)}${dias ? ` <span class="ficha-etapa-dias">· ${escapeHtml(dias)}</span>` : ''}</div>
+          <div class="ficha-etapa-titulo">${icono}${escapeHtml(ETIQUETA_ETAPA[key] || key)}${dias ? ` <span class="ficha-etapa-dias">· ${escapeHtml(dias)}</span>` : ''}</div>
           ${observar.length ? `<ul class="ficha-etapa-observar">${observar.map((o) => `<li>${escapeHtml(o)}</li>`).join('')}</ul>` : ''}
         </div>
       `;
@@ -150,7 +157,7 @@ async function renderFichaEspecie(id, root) {
         <div class="detalle-badges">
           <span class="badge">${escapeHtml(identidad.familia)}</span>
           <span class="badge tierra">${escapeHtml(etiquetaTipoSeguimiento(identidad.tipoSeguimiento))}</span>
-          ${origen && origen.estatus === 'nativa' ? '<span class="badge nativa">🌿 Nativa</span>' : ''}
+          ${origen && origen.estatus === 'nativa' ? `<span class="badge nativa">${renderIcon('especie-nativa', { size: 14 })} Nativa</span>` : ''}
         </div>
       </div>
     </div>

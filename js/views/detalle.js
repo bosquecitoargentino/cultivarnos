@@ -74,15 +74,15 @@ async function renderDetalle(id, root) {
           ${cultivo.estado === 'finalizado' ? `<span class="badge finalizado">Finalizado</span>` : ''}
         </div>
         ${cultivo.nota ? `<div class="detalle-nota">${escapeHtml(cultivo.nota)}</div>` : ''}
-        ${especieEnBiblioteca ? `<a href="#/biblioteca/${especieEnBiblioteca.id}" class="detalle-link-biblioteca">📖 Ver ficha de la especie</a>` : ''}
+        ${especieEnBiblioteca ? `<a href="#/biblioteca/${especieEnBiblioteca.id}" class="detalle-link-biblioteca">${renderIcon('biblioteca', { size: 16 })} Ver ficha de la especie</a>` : ''}
       </div>
     </div>
 
     <div class="detalle-actions">
-      <button id="btn-add-evento">➕ Evento</button>
-      <button id="btn-add-recordatorio">⏰ Recordatorio</button>
-      <button id="btn-editar-cultivo">✏️ Editar</button>
-      <button id="btn-toggle-estado">${cultivo.estado === 'finalizado' ? '↩️ Reactivar' : '🏁 Finalizar'}</button>
+      <button id="btn-add-evento">${renderIcon('registrar', { size: 18 })} Evento</button>
+      <button id="btn-add-recordatorio">${renderIcon('recordatorio', { size: 18 })} Recordatorio</button>
+      <button id="btn-editar-cultivo">${renderIcon('editar', { size: 18 })} Editar</button>
+      <button id="btn-toggle-estado">${cultivo.estado === 'finalizado' ? '↩️ Reactivar' : `${renderIcon('ciclo', { size: 18 })} Finalizar`}</button>
     </div>
 
     ${cultivo.estado === 'finalizado' ? `<section id="ciclo-completado-section"></section>` : ''}
@@ -503,13 +503,13 @@ function pintarCicloCompletado(wrap, cultivo, resumen) {
       ${fin_ && fin_.motivoLabel ? `<span class="badge finalizado">${escapeHtml(fin_.motivoLabel)}</span>` : ''}
       ${indicadores.length ? `
       <div class="detalle-badges" style="margin-top:10px;">
-        ${indicadores.map((i) => `<span class="badge">${i.icon} ${escapeHtml(i.texto)}</span>`).join('')}
+        ${indicadores.map((i) => `<span class="badge">${i.iconSvg ? renderIcon(i.iconSvg, { size: 14 }) : i.icon} ${escapeHtml(i.texto)}</span>`).join('')}
       </div>` : ''}
       ${fin_ && fin_.nota ? `
       <div class="detalle-nota" style="margin-top:10px;">
         <strong>Lo que me deja este cultivo</strong><br />${escapeHtml(fin_.nota)}
       </div>` : ''}
-      <button type="button" id="btn-compartir-resumen" class="btn-secondary" style="margin-top:14px;">📤 Compartir resumen</button>
+      <button type="button" id="btn-compartir-resumen" class="btn-secondary" style="margin-top:14px;">${renderIcon('compartir', { size: 18 })} Compartir resumen</button>
     </div>
   `;
 
@@ -1186,7 +1186,7 @@ function openEventoModal(cultivoId, onSaved, opts) {
       <div class="form-group">
         <label class="form-label">Tipo</label>
         <div class="chip-group" id="ev-tipo">
-          ${EVENTO_TIPOS.filter((t) => t.value !== 'finalizacion' && t.value !== 'reactivacion').map((t) => `<div class="chip-option ${t.value === tipoSeleccionado ? 'selected' : ''}" data-value="${t.value}">${t.icon} ${t.label}</div>`).join('')}
+          ${EVENTO_TIPOS.filter((t) => t.value !== 'finalizacion' && t.value !== 'reactivacion').map((t) => `<div class="chip-option ${t.value === tipoSeleccionado ? 'selected' : ''}" data-value="${t.value}">${t.iconSvg ? renderIcon(t.iconSvg, { size: 16 }) : t.icon} ${t.label}</div>`).join('')}
         </div>
       </div>
       `}

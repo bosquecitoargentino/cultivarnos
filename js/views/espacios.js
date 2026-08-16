@@ -14,7 +14,7 @@ async function renderEspacios(root) {
 
   root.innerHTML = `
     <div class="view-header">
-      <h1>Espacios</h1>
+      <h1>${renderIcon('espacios', { size: 22 })} Espacios</h1>
       <p>Tu huerta, vista por lugar.</p>
     </div>
     <div id="espacios-list"></div>

@@ -85,7 +85,7 @@ async function openRegistrarSheet() {
     <div class="modal-sheet">
       <div class="modal-close-row"><button id="modal-close">✕</button></div>
       <h2>Registrar</h2>
-      <button id="sheet-observacion" class="btn-primary" style="margin-bottom:10px;">👁 Registrar observación</button>
+      <button id="sheet-observacion" class="btn-primary" style="margin-bottom:10px;">${renderIcon('observacion', { size: 18 })} Registrar observación</button>
       <button id="sheet-nuevo-cultivo" class="btn-secondary">＋ Nuevo cultivo</button>
     </div>
   `);

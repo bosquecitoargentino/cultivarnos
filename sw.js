@@ -11,7 +11,7 @@
 // (ej. la pantalla de Configuración) NO tiene su propia copia del número:
 // lo consulta en tiempo de ejecución mandándole un mensaje a este Service
 // Worker (ver utils.js#obtenerVersionApp). Una sola fuente de verdad real.
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.9.0';
 
 const CACHE_NAME = `cultivarnos-v${APP_VERSION}`;
 const APP_SHELL = [
@@ -20,6 +20,7 @@ const APP_SHELL = [
   './manifest.json',
   './css/styles.css',
   './js/app.js',
+  './js/icons.js',
   './js/db.js',
   './js/utils.js',
   './js/data/cultivos-data.js',

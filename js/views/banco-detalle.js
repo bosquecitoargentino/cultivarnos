@@ -87,7 +87,7 @@ async function renderBancoDetalle(id, root) {
       ` : ''}
     </section>
 
-    <button type="button" id="btn-editar-lote" class="btn-secondary" style="margin-top:8px;">✏️ Editar</button>
+    <button type="button" id="btn-editar-lote" class="btn-secondary" style="margin-top:8px;">${renderIcon('editar', { size: 18 })} Editar</button>
     <button type="button" id="btn-eliminar-lote" class="btn-danger" style="margin-top:8px;">Eliminar lote</button>
   `;
 

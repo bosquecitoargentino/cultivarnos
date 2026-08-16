@@ -6,18 +6,28 @@ const TIPO_INICIO_LABELS = {
   trasplante: 'Trasplante',
 };
 
+// `icon` (emoji) queda en todos los casos — es el único que puede usar
+// motor-tarjeta.js, que dibuja sobre un <canvas> y por lo tanto solo
+// puede pintar texto/glifos, nunca un <svg> (ver icons.js). `iconSvg` es
+// opcional y solo está en los 7 tipos que tienen un ícono equivalente en
+// la lámina aprobada (punto "eventos de ciclo" del pedido, + Fotografía
+// porque reutiliza el mismo ícono ya aprobado para la acción "Foto"); los
+// demás (revisión, baja, floración, reactivación, otro) se quedan solo
+// con emoji a propósito — no hay ícono de la lámina que les calce sin
+// forzarlo, y el pedido es explícito en no mezclar con íconos genéricos
+// para "completar" la lista.
 const EVENTO_TIPOS = [
-  { value: 'siembra', label: 'Siembra', icon: '🌰' },
-  { value: 'observacion', label: 'Observación', icon: '👁️' },
+  { value: 'siembra', label: 'Siembra', icon: '🌰', iconSvg: 'siembra' },
+  { value: 'observacion', label: 'Observación', icon: '👁️', iconSvg: 'observacion' },
   { value: 'revision', label: 'Revisión guiada', icon: '🔍' },
-  { value: 'fotografia', label: 'Fotografía', icon: '📷' },
-  { value: 'germinacion', label: 'Germinación', icon: '🌱' },
-  { value: 'trasplante', label: 'Trasplante', icon: '🪴' },
+  { value: 'fotografia', label: 'Fotografía', icon: '📷', iconSvg: 'foto' },
+  { value: 'germinacion', label: 'Germinación', icon: '🌱', iconSvg: 'germinacion' },
+  { value: 'trasplante', label: 'Trasplante', icon: '🪴', iconSvg: 'trasplante' },
   { value: 'baja', label: 'Baja / pérdida', icon: '💔' },
-  { value: 'poda', label: 'Poda', icon: '✂️' },
+  { value: 'poda', label: 'Poda', icon: '✂️', iconSvg: 'poda' },
   { value: 'floracion', label: 'Floración', icon: '🌸' },
-  { value: 'cosecha', label: 'Cosecha', icon: '🧺' },
-  { value: 'finalizacion', label: 'Cierre de ciclo', icon: '🏁' },
+  { value: 'cosecha', label: 'Cosecha', icon: '🧺', iconSvg: 'cosecha' },
+  { value: 'finalizacion', label: 'Cierre de ciclo', icon: '🏁', iconSvg: 'ciclo' },
   { value: 'reactivacion', label: 'Reactivación', icon: '↩️' },
   { value: 'otro', label: 'Otro', icon: '📝' },
 ];
@@ -27,9 +37,15 @@ function eventoLabel(tipo) {
   return found ? found.label : tipo;
 }
 
+// Devuelve HTML: el <svg> del sistema cuando el tipo tiene iconSvg, si no
+// el emoji de siempre. Los dos llamadores existentes (utils.js#abrirLightbox
+// y views/detalle.js, timeline) ya interpolan este valor adentro de un
+// <span>...</span> por template literal, así que reciban emoji o SVG les
+// da exactamente igual — ninguno de los dos necesitó cambiar por esto.
 function eventoIcon(tipo) {
   const found = EVENTO_TIPOS.find((e) => e.value === tipo);
-  return found ? found.icon : '📝';
+  if (!found) return '📝';
+  return found.iconSvg ? renderIcon(found.iconSvg, { size: 18 }) : found.icon;
 }
 
 // Normaliza texto libre para poder compararlo/buscarlo sin depender de
