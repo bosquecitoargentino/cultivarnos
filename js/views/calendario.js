@@ -1,6 +1,12 @@
 // views/calendario.js — "Sembrar ahora", navegable mes a mes. Vista simple
 // a propósito: sin interfaz de calendario compleja, solo listas agrupadas.
 
+// Mes que se estaba mirando la última vez — vive fuera de renderCalendario
+// para sobrevivir a un re-render de la vista (ej. volver acá después de
+// abrir una especie desde un chip). Se resetea solo si se recarga la
+// página entera, que es el comportamiento esperado.
+let mesCalendarioActual = null;
+
 async function renderCalendario(root) {
   const config = await DB.getConfiguracion();
 
@@ -11,7 +17,6 @@ async function renderCalendario(root) {
         <h1>Calendario de temporada</h1>
       </div>
       <div class="empty-state">
-        <span class="emoji">🌍</span>
         Configurá tu hemisferio para ver el calendario estacional.
       </div>
       <a href="#/configuracion" class="btn-secondary" style="display:block;text-align:center;margin-top:12px;">Ir a Configuración</a>
@@ -19,7 +24,7 @@ async function renderCalendario(root) {
     return;
   }
 
-  let mesActual = new Date().getMonth() + 1; // 1-12
+  let mesActual = mesCalendarioActual || (new Date().getMonth() + 1); // 1-12
 
   root.innerHTML = `
     <div class="view-header view-header-compacto">
@@ -39,19 +44,18 @@ async function renderCalendario(root) {
   const contenido = root.querySelector('#cal-contenido');
 
   function pintar() {
+    mesCalendarioActual = mesActual;
     mesLabel.textContent = nombreMes(mesActual);
     const grupos = obtenerCalendarioMes(config.hemisferio, mesActual);
-    // Almácigo se queda con el emoji: no hay un ícono en la lámina que
-    // distinga "semillero" de "siembra directa" sin repetir el mismo
-    // dibujo de 'siembra' en dos títulos vecinos, lo cual generaría la
-    // mezcla confusa que se pidió evitar en esta pasada. Siembra directa
-    // y Trasplante sí tienen un ícono propio y exacto, así que usan el
-    // ícono del sistema — mismo dibujo que ya se ve en el historial de
-    // eventos, para que "Trasplante" se lea igual en todos lados.
+    // Los tres títulos usan ícono del sistema — Almácigo con 'germinacion'
+    // (semillero = arrancar plantines, el mismo concepto que ese ícono ya
+    // representa en el historial de eventos), Siembra directa con
+    // 'siembra' y Trasplante con 'trasplante'. Tres dibujos distintos, sin
+    // repetir ninguno entre títulos vecinos.
     const secciones = [
-      { titulo: '🌱 Almácigo', items: grupos.almacigo },
-      { titulo: `${renderIcon('siembra', { scale: 'xs' })} Siembra directa`, items: grupos.directa },
-      { titulo: `${renderIcon('trasplante', { scale: 'xs' })} Trasplante (aproximado)`, items: grupos.trasplante },
+      { titulo: `${renderIcon('germinacion', { scale: 'sm' })} Almácigo`, items: grupos.almacigo },
+      { titulo: `${renderIcon('siembra', { scale: 'sm' })} Siembra directa`, items: grupos.directa },
+      { titulo: `${renderIcon('trasplante', { scale: 'sm' })} Trasplante (aproximado)`, items: grupos.trasplante },
     ].filter((s) => s.items.length);
 
     if (!secciones.length) {
@@ -59,18 +63,31 @@ async function renderCalendario(root) {
       return;
     }
 
+    // Cada chip es una especie de la Biblioteca (mismo id, misma fuente —
+    // ver motor-estacional.js#obtenerCalendarioMes) — tocarla abre esa
+    // ficha directamente, sin buscar por texto ni duplicar nada.
     contenido.innerHTML = secciones
       .map(
         (s) => `
           <div class="calendario-grupo">
             <div class="calendario-grupo-titulo">${s.titulo}</div>
             <div class="calendario-chips">
-              ${s.items.map((it) => `<span class="calendario-chip">${escapeHtml(it.nombre)}</span>`).join('')}
+              ${s.items.map((it) => `<button type="button" class="calendario-chip" data-id="${escapeHtml(String(it.id))}">${escapeHtml(it.nombre)}</button>`).join('')}
             </div>
           </div>
         `
       )
       .join('');
+
+    contenido.querySelectorAll('.calendario-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const especieId = chip.dataset.id;
+        if (!especieId) return;
+        mesCalendarioActual = mesActual;
+        window.__volverDesdeFicha = '#/calendario';
+        navigate('#/biblioteca/' + especieId);
+      });
+    });
   }
 
   root.querySelector('#cal-prev').addEventListener('click', () => {

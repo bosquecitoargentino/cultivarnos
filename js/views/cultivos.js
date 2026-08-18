@@ -34,9 +34,9 @@ async function renderCultivos(root) {
 
   root.innerHTML = `
     <div class="view-header">
-      <h1>${renderIcon('cultivos', { scale: 'lg' })} Mis cultivos</h1>
+      <h1>Mis cultivos</h1>
       <p>${cultivos.length} registrado${cultivos.length === 1 ? '' : 's'}</p>
-      <a href="#/espacios" class="link-ver-todas">${renderIcon('espacios', { scale: 'xs' })} Ver espacios</a>
+      <a href="#/espacios" class="link-ver-todas">${renderIcon('espacios', { scale: 'sm' })} Ver espacios</a>
     </div>
     <div class="filter-tabs">
       <div class="filter-tab active" data-filter="activo">Activos</div>

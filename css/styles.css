@@ -10,6 +10,7 @@
   --crema-card: #ffffff;
   --texto: #2b2a26;
   --texto-suave: #6b6a63;
+  --nav-inactivo: #5f6b5c;
   --borde: #e4ded0;
   --alerta: #c0553a;
   --amarillo: #d9a441;
@@ -218,7 +219,7 @@ a { color: inherit; text-decoration: none; }
 .bottom-nav {
   position: fixed;
   bottom: 0; left: 0; right: 0;
-  height: calc(64px + var(--safe-bottom));
+  height: calc(72px + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
   background: var(--crema-card);
   border-top: 1px solid var(--borde);
@@ -232,8 +233,8 @@ a { color: inherit; text-decoration: none; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  color: var(--texto-suave);
+  gap: 4px;
+  color: var(--nav-inactivo);
   font-size: 12px;
   transition: color 0.15s ease;
   background: none;
@@ -243,21 +244,24 @@ a { color: inherit; text-decoration: none; }
 }
 .nav-item:active { opacity: 0.6; }
 
-.nav-item .nav-icon { font-size: 22px; transition: transform 0.18s var(--ease); }
-.nav-item.active { color: var(--verde); font-weight: 600; }
-.nav-item.active .nav-icon { transform: translateY(-2px); }
+/* El ícono ya no cambia de tamaño ni de posición entre activo/inactivo —
+   la selección se percibe solo por color + peso (más info abajo). Esto
+   evita que las 4 pestañas "salten" de línea óptica al cambiar de
+   pestaña, que era justamente el problema que había con el
+   translateY(-2px) que tenía esta regla antes. */
+.nav-item .nav-icon { display: flex; }
+.nav-item.active { color: var(--verde); font-weight: 700; }
 
 .nav-item-cta .nav-icon {
   background: var(--verde);
-  color: #fff;
-  width: 34px;
-  height: 34px;
+  color: var(--crema);
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
-  transition: background-color 0.15s ease, transform 0.18s var(--ease);
+  transition: background-color 0.15s ease;
 }
 /* Nav inferior (íconos del sistema): el ➕/🏠/🌱/📖 de antes eran emoji
    dentro de estos mismos <span class="nav-icon">; ahora es un <svg
@@ -269,11 +273,12 @@ a { color: inherit; text-decoration: none; }
    `scale` que le pasaba index.html a renderIcon(), dos fuentes de verdad
    para el mismo número (bug de consistencia real encontrado en la
    auditoría de esta etapa). Ahora el único lugar que decide el tamaño es
-   el `scale` de renderIcon() en index.html: 'lg' para los 3 ítems planos
-   del nav, 'md' para el de "Registrar" — más chico a propósito porque
-   vive adentro de un círculo de 34px y necesita más aire alrededor que
-   un ícono plano. */
-.nav-item-cta.active .nav-icon { background: var(--verde-oscuro); transform: translateY(-2px) rotate(90deg); }
+   el `scale` de renderIcon() en index.html: 'lg' (24px) para los 3 ítems
+   planos del nav Y para "Registrar" — antes "Registrar" usaba 'md'
+   (20px) dentro de un círculo mucho más chico (34px), lo que lo dejaba
+   diminuto y casi invisible; ahora el círculo (54px) le da aire de sobra
+   a un ícono del mismo tamaño que los otros 3, en vez de encogerlo. */
+.nav-item-cta.active .nav-icon { background: var(--verde-oscuro); }
 
 /* ---------- App container ---------- */
 .app-view {
@@ -1201,14 +1206,19 @@ section + section { margin-top: 20px; }
 }
 .calendario-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .calendario-chip {
+  font: inherit;
   font-size: 13px;
   font-weight: 600;
   padding: 8px 14px;
+  border: none;
   border-radius: 999px;
   background: var(--crema-card);
   color: var(--texto);
   box-shadow: var(--sombra);
+  cursor: pointer;
+  transition: background-color 0.12s ease, transform 0.1s ease;
 }
+.calendario-chip:active { background: var(--verde-suave); transform: scale(0.96); }
 
 /* ---------- Toast ---------- */
 .toast {

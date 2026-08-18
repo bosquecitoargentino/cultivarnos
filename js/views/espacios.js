@@ -77,7 +77,7 @@ async function renderEspacioDetalle(clave, root) {
         <div class="distribucion-lista" id="espacio-cultivos-list">
           ${espacio.cultivos.map((item) => `
             <div class="distribucion-fila espacio-cultivo-fila" data-id="${item.cultivo.id}" role="button" tabindex="0">
-              <span class="distribucion-icono">🌿</span>
+              <span class="distribucion-icono">${renderIcon('cultivos', { scale: 'xs' })}</span>
               <span class="distribucion-ubicacion">${escapeHtml(item.cultivo.especie)}${item.cultivo.variedad ? ` · ${escapeHtml(item.cultivo.variedad)}` : ''}</span>
               <span class="distribucion-cantidad">${item.conCantidad ? item.cantidad : 'cantidad no registrada'}</span>
             </div>

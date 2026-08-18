@@ -122,10 +122,19 @@ async function renderFichaEspecie(id, root) {
   root = root || APP_ROOT;
   const especie = typeof getEspecie === 'function' ? getEspecie(id) : null;
 
+  // Si se llegó acá desde una especie tocada en el Calendario (ver
+  // calendario.js), volver debe regresar al Calendario en el mismo mes en
+  // vez de a la lista de Biblioteca — bandera de un solo uso, sin agregar
+  // un parámetro nuevo a la ruta ni duplicar la ficha. Se lee y se limpia
+  // enseguida: solo aplica a esta renderización puntual.
+  const volverHref = window.__volverDesdeFicha || '#/biblioteca';
+  const volverTexto = window.__volverDesdeFicha ? '‹ Calendario' : '‹ Biblioteca';
+  window.__volverDesdeFicha = null;
+
   if (!especie) {
     root.innerHTML = `
       <div class="view-header view-header-compacto">
-        <a href="#/biblioteca" class="volver-link">‹ Biblioteca</a>
+        <a href="${volverHref}" class="volver-link">${volverTexto}</a>
       </div>
       <div class="empty-state">${renderIcon('buscar', { scale: 'xl', className: 'icon-bloque' })}Todavía no hay una ficha para esta especie.</div>
     `;
@@ -144,7 +153,7 @@ async function renderFichaEspecie(id, root) {
 
   root.innerHTML = `
     <div class="view-header view-header-compacto">
-      <a href="#/biblioteca" class="volver-link">‹ Biblioteca</a>
+      <a href="${volverHref}" class="volver-link">${volverTexto}</a>
     </div>
 
     <div class="ficha-hero">
@@ -235,7 +244,7 @@ async function renderFichaEspecie(id, root) {
 
     ${ecologia && ((ecologia.interaccionesAObservar || []).length || (ecologia.principiosManejo || []).length) ? `
     <section class="ficha-seccion">
-      <div class="section-title">Relaciones a observar 🌎</div>
+      <div class="section-title">Relaciones a observar</div>
       ${(ecologia.interaccionesAObservar || []).length ? `<ul class="ficha-etapa-observar">${ecologia.interaccionesAObservar.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul>` : ''}
     </section>
     ` : ''}

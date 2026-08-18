@@ -26,12 +26,12 @@ async function renderInicio(root) {
     const base = `${n} cultivo${n === 1 ? '' : 's'} activo${n === 1 ? '' : 's'}`;
     resumen = paraHoy.length
       ? `${base} · ${paraHoy.length} recordatorio${paraHoy.length === 1 ? '' : 's'}`
-      : `${base} · Todo al día 🌱`;
+      : `${base} · Todo al día`;
   }
 
   root.innerHTML = `
     <div class="view-header view-header-compacto">
-      <h1>Hola 🌿</h1>
+      <h1>Hola</h1>
       <p>${resumen}</p>
     </div>
 
@@ -57,7 +57,7 @@ async function renderInicio(root) {
   // línea chica para no empujar hacia abajo lo que importa.
   const recSection = root.querySelector('#recordatorios-section');
   if (!recordatorios.length) {
-    recSection.innerHTML = `<p class="recordatorios-vacio">✅ Sin recordatorios para hoy</p>`;
+    recSection.innerHTML = `<p class="recordatorios-vacio">Sin recordatorios para hoy</p>`;
   } else {
     recSection.innerHTML = `
       <div class="section-title">Recordatorios</div>
