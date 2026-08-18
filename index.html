@@ -103,7 +103,15 @@
   document.querySelector('#bottom-nav [data-nav="inicio"] .nav-icon').innerHTML = renderIcon('inicio', { scale: 'lg' });
   document.querySelector('#bottom-nav [data-nav="cultivos"] .nav-icon').innerHTML = renderIcon('cultivos', { scale: 'lg' });
   document.querySelector('#bottom-nav [data-nav="biblioteca"] .nav-icon').innerHTML = renderIcon('biblioteca', { scale: 'lg' });
-  document.querySelector('#nav-registrar .nav-icon').innerHTML = renderIcon('registrar', { scale: 'lg' });
+  // "Registrar" usa un ícono propio ('agregar', un "+" simple — ver
+  // js/icons.js) en vez de 'registrar' (el que usa el resto de la app):
+  // dentro del círculo verde, el ícono botánico detallado seguía
+  // leyéndose débil aun ya corregido. Escala 'xl' (32px, no 'lg' 24px
+  // como los otros 3 ítems) a propósito — este botón es la acción
+  // principal de la app, dentro de un círculo de 54px, así que puede
+  // sostener más presencia sin quedar apretado (ver .nav-item-cta
+  // .nav-icon en styles.css).
+  document.querySelector('#nav-registrar .nav-icon').innerHTML = renderIcon('agregar', { scale: 'xl' });
 
   // Menú de exportación / importación
   document.getElementById('btn-menu').addEventListener('click', () => {
