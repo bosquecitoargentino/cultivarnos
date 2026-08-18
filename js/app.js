@@ -83,7 +83,7 @@ function navigate(hash) {
 async function openRegistrarSheet() {
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
-      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
       <h2>Registrar</h2>
       <button id="sheet-observacion" class="btn-primary" style="margin-bottom:10px;">${renderIcon('observacion', { scale: 'sm' })} Registrar observación</button>
       <button id="sheet-nuevo-cultivo" class="btn-secondary">＋ Nuevo cultivo</button>

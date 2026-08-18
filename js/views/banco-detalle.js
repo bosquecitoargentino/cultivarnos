@@ -121,7 +121,7 @@ function abrirModalEditarLote(lote, onDone) {
 
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
-      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
       <h2>Editar lote</h2>
 
       <div class="form-group">
@@ -191,7 +191,7 @@ function abrirModalEditarLote(lote, onDone) {
             ${renderIcon('foto', { scale: 'xl' })}
             <span>Tocá para agregar una foto</span>
           </span>
-          <button type="button" class="remove-photo hidden" id="edit-photo-remove">✕</button>
+          <button type="button" class="remove-photo hidden" id="edit-photo-remove" aria-label="Quitar foto">✕</button>
           <input type="file" id="edit-foto" accept="image/*" capture="environment" hidden />
         </div>
       </div>

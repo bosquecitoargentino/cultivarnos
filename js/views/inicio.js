@@ -191,7 +191,7 @@ async function openObservacionRapida(cultivos) {
 
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
-      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
       <h2>¿Qué cultivo?</h2>
       <div class="cultivo-pick-list">${itemsHtml.join('')}</div>
     </div>
@@ -211,7 +211,7 @@ function renderObservacionPaso2(backdrop, close, cultivoId, especieLabel) {
   let previewUrl = null;
 
   sheet.innerHTML = `
-    <div class="modal-close-row"><button id="modal-close">✕</button></div>
+    <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
     <h2>${escapeHtml(especieLabel)}</h2>
     <div class="form-group">
       <div class="photo-picker-compacta" id="obs-photo-picker" role="button" tabindex="0" aria-label="Tomar foto">

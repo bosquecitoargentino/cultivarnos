@@ -163,11 +163,20 @@ a { color: inherit; text-decoration: none; }
   background: transparent;
   border: none;
   color: #fff;
-  font-size: 22px;
   width: 40px;
   height: 40px;
   border-radius: 50%;
   cursor: pointer;
+  /* Antes solo tenía width/height + font-size (pensado para un glifo de
+     texto/emoji, que se autocentra por line-height): sin display:flex, el
+     <svg> del ícono ('mas') quedaba apoyado en el layout inline por
+     defecto del <button>, que no garantiza centrado real dentro del
+     círculo — se notaba levemente descentrado. flex + centrado explícito
+     es correcto para CUALQUIER contenido (ícono SVG o, si hiciera falta,
+     texto), así que no hace falta un caso especial. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .icon-btn:active { background: rgba(255,255,255,0.15); }
 
@@ -186,7 +195,9 @@ a { color: inherit; text-decoration: none; }
 }
 .menu-panel.hidden { display: none; }
 .menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   text-align: left;
   padding: 14px 16px;
@@ -306,6 +317,9 @@ a { color: inherit; text-decoration: none; }
   margin-bottom: 16px;
 }
 .view-header h1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 22px;
   font-weight: 800;
   color: var(--verde-oscuro);
@@ -327,12 +341,21 @@ section + section { margin-top: 20px; }
   margin-bottom: 10px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  /* gap, no justify-content:space-between: varios títulos de sección ahora
+     empiezan con un ícono del sistema (ej. "🌱 Esta temporada"), y con
+     solo 2 hijos flex (ícono + texto) space-between los mandaba a cada
+     punta del contenedor — el ícono pegado a la izquierda y el título
+     pegado a la derecha, con un hueco enorme en el medio. gap los mantiene
+     juntos; el link opcional de la derecha (".link-small", ej. "Ver
+     todos") se sigue empujando al extremo con margin-left:auto en vez de
+     depender de space-between. */
+  gap: 6px;
 }
 .section-title .link-small {
   font-size: 13px;
   font-weight: 500;
   color: var(--verde);
+  margin-left: auto;
 }
 
 /* ---------- Empty state ---------- */
@@ -655,6 +678,9 @@ section + section { margin-top: 20px; }
 .chip-group { display: flex; gap: 8px; flex-wrap: wrap; }
 .chip-group-disabled { opacity: 0.55; pointer-events: none; }
 .chip-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 10px 16px;
   border-radius: 999px;
   border: 1px solid var(--borde);
@@ -715,6 +741,15 @@ section + section { margin-top: 20px; }
   display: none;
 }
 
+/* .btn-primary/.btn-secondary/.btn-danger: flex + gap en vez de depender
+   del centrado de texto por defecto del navegador — varios de estos
+   botones combinan un ícono del sistema con su texto (ej. "🔍 Buscar"), y
+   sin un contenedor flex ese emparejamiento queda librado al espacio en
+   blanco literal del template string + vertical-align:middle del ícono:
+   funciona, pero el espaciado no es consistente ni controlado. Con flex,
+   el gap entre ícono y texto queda fijo y prolijo sin tocar ningún
+   llamado a renderIcon() — un botón sin ícono (un solo hijo de texto)
+   sigue viéndose exactamente igual, centrado por justify-content. */
 .btn-primary {
   width: 100%;
   padding: 15px;
@@ -727,6 +762,10 @@ section + section { margin-top: 20px; }
   box-shadow: var(--sombra);
   scroll-margin-bottom: 100px;
   transition: transform 0.1s ease, background-color 0.15s ease, box-shadow 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 .btn-primary:active { background: var(--verde-oscuro); transform: scale(0.98); box-shadow: none; }
 .btn-secondary {
@@ -739,6 +778,10 @@ section + section { margin-top: 20px; }
   font-size: 15px;
   font-weight: 600;
   transition: transform 0.1s ease, background-color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 .btn-secondary:active { transform: scale(0.98); background: var(--verde-suave); }
 .btn-danger {
@@ -751,6 +794,10 @@ section + section { margin-top: 20px; }
   font-size: 15px;
   font-weight: 600;
   transition: transform 0.1s ease, background-color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 .btn-danger:active { transform: scale(0.98); background: #fdf1ee; }
 
@@ -785,6 +832,9 @@ section + section { margin-top: 20px; }
 .detalle-variedad { font-size: 13px; color: var(--texto-suave); margin-top: 2px; }
 .detalle-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   font-weight: 600;
   padding: 4px 10px;
@@ -810,6 +860,10 @@ section + section { margin-top: 20px; }
   margin-bottom: 20px;
 }
 .detalle-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   padding: 10px 6px;
   border-radius: var(--radio-chico);
   border: 1px solid var(--borde);
@@ -946,8 +1000,10 @@ section + section { margin-top: 20px; }
 .foto-grid-item:active { transform: scale(0.95); }
 
 .link-ver-todas {
-  display: block;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   margin-top: 10px;
   font-size: 13px;
   font-weight: 600;
@@ -1035,6 +1091,11 @@ section + section { margin-top: 20px; }
   justify-content: space-between;
   font-weight: 700;
   font-size: 14px;
+}
+.lightbox-caption-head span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .lightbox-caption-fecha { font-weight: 500; color: rgba(255,255,255,0.7); font-size: 12px; }
 .lightbox-caption-nota { margin-top: 6px; font-size: 13px; color: rgba(255,255,255,0.9); line-height: 1.4; }
@@ -1130,6 +1191,9 @@ section + section { margin-top: 20px; }
 }
 .calendario-grupo + .calendario-grupo { margin-top: 16px; }
 .calendario-grupo-titulo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 13px;
   font-weight: 700;
   color: var(--verde-oscuro);
@@ -1312,7 +1376,7 @@ button.link-ver-todas:active { transform: scale(0.98); }
   padding: 32px 6px 12px;
   animation: fadeInUp var(--dur) var(--ease) backwards;
 }
-.creado-icono { font-size: 44px; margin-bottom: 10px; }
+.creado-icono { display: flex; justify-content: center; margin-bottom: 10px; }
 .creado-titulo {
   font-size: 19px;
   font-weight: 800;
@@ -1355,6 +1419,9 @@ button.link-ver-todas:active { transform: scale(0.98); }
   box-shadow: var(--sombra);
 }
 .siembra-card-titulo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 14px;
   font-weight: 700;
   color: var(--verde-oscuro);
@@ -1378,6 +1445,9 @@ button.link-ver-todas:active { transform: scale(0.98); }
   margin-top: 2px;
 }
 .siembra-todo-trasplantado {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 13px;
   color: var(--texto);
   line-height: 1.4;
@@ -1530,7 +1600,9 @@ button.link-ver-todas:active { transform: scale(0.98); }
 
 /* ---------- Ficha de especie (Biblioteca) ---------- */
 .detalle-link-biblioteca {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin-top: 10px;
   font-size: 13px;
   font-weight: 600;
@@ -1625,7 +1697,15 @@ button.link-ver-todas:active { transform: scale(0.98); }
   border-radius: 50%;
   background: var(--verde-claro);
 }
-.ficha-etapa-titulo { font-size: 14px; font-weight: 700; color: var(--verde-oscuro); }
+.ficha-etapa-titulo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--verde-oscuro);
+}
 .ficha-etapa-dias { font-size: 12px; font-weight: 500; color: var(--texto-suave); }
 .ficha-etapa-observar {
   margin: 4px 0 0;

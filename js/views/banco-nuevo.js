@@ -95,7 +95,7 @@ function renderBancoNuevo(root, queryString) {
               ${renderIcon('foto', { scale: 'xl' })}
               <span>Tocá para agregar una foto</span>
             </span>
-            <button type="button" class="remove-photo hidden" id="f-photo-remove">✕</button>
+            <button type="button" class="remove-photo hidden" id="f-photo-remove" aria-label="Quitar foto">✕</button>
             <input type="file" id="f-foto" accept="image/*" capture="environment" hidden />
           </div>
         </div>

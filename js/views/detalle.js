@@ -530,7 +530,7 @@ function abrirModalFinalizarCultivo(cultivoId, onDone) {
 
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
-      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
       <h2>Finalizar cultivo</h2>
       <div class="form-group">
         <label class="form-label">¿Por qué termina este seguimiento? <span class="optional">(opcional)</span></label>
@@ -578,7 +578,7 @@ function abrirModalFinalizarCultivo(cultivoId, onDone) {
 function abrirModalGerminacion(cultivoId, resumen, onDone) {
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
-      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
       <h2>Germinación</h2>
       <div class="form-group">
         <label class="form-label">¿Cuántas nuevas germinaron?</label>
@@ -632,7 +632,7 @@ function abrirModalTrasplante(cultivoId, resumen, onDone) {
   const sugerencias = resumen.destinos.map((d) => d.destino).filter((d) => d !== 'Sin destino especificado').slice(0, 4);
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
-      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
       <h2>Trasplante</h2>
       <div class="form-group">
         <label class="form-label">Cantidad trasplantada</label>
@@ -707,7 +707,7 @@ function abrirModalBaja(cultivoId, resumen, onDone) {
 
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
-      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
       <h2>Baja / pérdida</h2>
       <div class="form-group">
         <label class="form-label">Cantidad</label>
@@ -829,7 +829,7 @@ function abrirModalAgregarSiembra(cultivo, onDone) {
 
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
-      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
       <h2>Agregar datos de siembra</h2>
       ${esSemilla ? `
       <div class="form-group">
@@ -906,7 +906,7 @@ function abrirModalEditarCultivo(cultivo, resumenSiembra, onDone) {
 
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
-      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
       <h2>Editar cultivo</h2>
       <div class="form-group">
         <label class="form-label">Especie</label>
@@ -997,7 +997,7 @@ function abrirModalEditarCultivo(cultivo, resumenSiembra, onDone) {
 function abrirSugerenciaRecordatorioStandalone(cultivoId, sugerencia, onDone) {
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
-      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
       <div class="sugerencia-evento">
         <div class="sugerencia-evento-icono">${renderIcon('recordatorio', { scale: 'xl' })}</div>
         <div class="sugerencia-evento-texto">¿Querés que te recuerde<br /><strong>"${escapeHtml(sugerencia.titulo)}"</strong><br />en ${sugerencia.dias} días?</div>
@@ -1175,7 +1175,7 @@ function openEventoModal(cultivoId, onSaved, opts) {
 
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
-      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
       <h2>${pregunta ? 'Registrar lo que veo' : 'Agregar evento'}</h2>
       ${pregunta ? `
       <div class="sugerencia-contexto">
@@ -1216,7 +1216,7 @@ function openEventoModal(cultivoId, onSaved, opts) {
             ${renderIcon('foto', { scale: 'xl' })}
             <span>Tocá para agregar una foto</span>
           </span>
-          <button type="button" class="remove-photo hidden" id="ev-photo-remove">✕</button>
+          <button type="button" class="remove-photo hidden" id="ev-photo-remove" aria-label="Quitar foto">✕</button>
           <input type="file" id="ev-foto" accept="image/*" capture="environment" hidden />
         </div>
       </div>
@@ -1425,7 +1425,7 @@ function openEventoModal(cultivoId, onSaved, opts) {
 function mostrarSugerenciaRecordatorioEnModal(backdrop, sugerencia, cultivoId, onDone) {
   const sheet = backdrop.querySelector('.modal-sheet');
   sheet.innerHTML = `
-    <div class="modal-close-row"><button id="modal-close">✕</button></div>
+    <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
     <div class="sugerencia-evento">
       <div class="sugerencia-evento-icono">${renderIcon('recordatorio', { scale: 'xl' })}</div>
       <div class="sugerencia-evento-texto">Evento registrado. ¿Querés que te recuerde<br /><strong>"${escapeHtml(sugerencia.titulo)}"</strong><br />en ${sugerencia.dias} días?</div>
@@ -1454,7 +1454,7 @@ function openRecordatorioModal(cultivoId, onSaved) {
 
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
-      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
       <h2>Nuevo recordatorio</h2>
       <div class="form-group">
         <label class="form-label">Título</label>

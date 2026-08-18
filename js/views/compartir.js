@@ -27,7 +27,7 @@ async function abrirCompartirResumen(cultivoId) {
 
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
-      <div class="modal-close-row"><button id="modal-close">✕</button></div>
+      <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
       <h2>Compartir resumen</h2>
       <div class="chip-group" id="compartir-formato">
         <div class="chip-option selected" data-value="publicacion">Publicación · 4:5</div>
