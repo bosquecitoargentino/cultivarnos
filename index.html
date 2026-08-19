@@ -8,7 +8,12 @@
 <meta name="theme-color" content="#3f6b45" />
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icons/icon-192.png" />
-<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<!-- apple-touch-icon: archivo dedicado de 180×180 (no el icon-192 general)
+     porque iOS lo usa tal cual para el ícono de "Agregar a inicio" — un
+     archivo del tamaño exacto que pide Apple evita que el sistema tenga
+     que reescalar sobre la marcha. Es el mismo isotipo que icon-192/
+     icon-512, solo exportado a 180px. -->
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="Cultivarnos" />
