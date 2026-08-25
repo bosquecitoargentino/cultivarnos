@@ -20,6 +20,13 @@ async function renderInicio(root) {
   // vacío o un texto de relleno genérico.
   const destacada = await getSugerenciaDestacada(activos, config.hemisferio);
 
+  // Recordatorio de respaldo: solo tiene sentido si ya hay algo que
+  // respaldar. Umbral mensual (ver utils.js#necesitaRespaldo). A propósito
+  // sin botón de "ocultar": a diferencia de las sugerencias, esto sí es
+  // intencionalmente un recordatorio (fue un pedido explícito, no algo que
+  // deba desaparecer solo).
+  const mostrarAvisoRespaldo = cultivos.length > 0 && necesitaRespaldo(config);
+
   // Deliberadamente NO hay ninguna señal acá sobre "hace cuánto no
   // observás" un cultivo, ni cuenta de observaciones pendientes: Inicio no
   // debe generar sensación de deuda. Los únicos recordatorios que se
@@ -49,6 +56,14 @@ async function renderInicio(root) {
       <button id="btn-obs-principal" class="btn-primary btn-obs-principal">${renderIcon('observacion', { scale: 'sm' })} Registrar observación</button>
       <a href="#/nuevo" class="link-nuevo-cultivo">＋ Nuevo cultivo</a>
     </section>
+
+    ${mostrarAvisoRespaldo ? `
+    <section>
+      <div class="temporada-prompt">
+        <span>${config.ultimoRespaldo ? 'Hace más de un mes que no hacés un respaldo.' : 'Todavía no hiciste un respaldo de tus datos.'}</span>
+        <button type="button" id="btn-respaldo-inicio" class="link-small">Hacer respaldo</button>
+      </div>
+    </section>` : ''}
 
     <section id="recordatorios-section"></section>
 
@@ -247,6 +262,22 @@ async function renderInicio(root) {
   root.querySelector('#btn-obs-principal').addEventListener('click', () => {
     openObservacionRapida(cultivos);
   });
+
+  const btnRespaldo = root.querySelector('#btn-respaldo-inicio');
+  if (btnRespaldo) {
+    btnRespaldo.addEventListener('click', async () => {
+      btnRespaldo.disabled = true;
+      try {
+        await exportarRespaldo();
+        showToast('Respaldo exportado');
+        renderInicio(root);
+      } catch (err) {
+        console.error(err);
+        showToast('Error al exportar');
+        btnRespaldo.disabled = false;
+      }
+    });
+  }
 }
 
 // ---------------------------------------------------------------------

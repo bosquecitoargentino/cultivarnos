@@ -483,14 +483,41 @@ async function exportarRespaldo() {
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const fecha = todayIsoDate();
+  // Nombre FIJO, sin fecha, a propósito (antes era
+  // `cultivarnos-backup-${fecha}.json`, uno nuevo por día): la idea es que
+  // la persona pueda ir reemplazando siempre el mismo archivo en vez de
+  // acumular uno por exportación. Aclaración importante para iPhone: esto
+  // no logra una reescritura silenciosa — ninguna app web puede reescribir
+  // sola un archivo específico en Files. Lo que sí logra es que, al
+  // guardar, iOS ofrezca "Reemplazar" sobre el archivo anterior con el
+  // mismo nombre (en vez de crear automáticamente uno con fecha distinta
+  // como antes) — sigue haciendo falta ese toque de la persona.
   a.href = url;
-  a.download = `cultivarnos-backup-${fecha}.json`;
+  a.download = 'cultivarnos-backup.json';
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
   await DB.setConfiguracion({ ultimoRespaldo: new Date().toISOString() });
+}
+
+// ---------------------------------------------------------------------
+// Recordatorio de respaldo (Inicio) — a partir del incidente donde se
+// perdió un respaldo completo por un problema de almacenamiento de iOS: la
+// idea es que la persona tenga una forma de acordarse de exportar antes de
+// tocar nada relacionado al ícono de la PWA, sin que se sienta una alarma.
+// Umbral mensual, elegido explícitamente por el usuario (no semanal, como
+// se había sugerido al principio). config.ultimoRespaldo es un timestamp
+// real (no fecha calendario, ver el comentario grande más arriba sobre esa
+// distinción), así que acá se compara con Date.now() directamente, sin
+// pasar por aFechaLocal/diasEntreFechas (esas son para fechas calendario).
+// ---------------------------------------------------------------------
+const RESPALDO_INTERVALO_DIAS = 30;
+
+function necesitaRespaldo(config) {
+  if (!config.ultimoRespaldo) return true;
+  const dias = (Date.now() - new Date(config.ultimoRespaldo).getTime()) / (1000 * 60 * 60 * 24);
+  return dias >= RESPALDO_INTERVALO_DIAS;
 }
 
 // ---------------------------------------------------------------------
