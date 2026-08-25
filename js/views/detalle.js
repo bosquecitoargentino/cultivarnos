@@ -59,6 +59,17 @@ async function renderDetalle(id, root) {
       return especieIdLegacy && typeof getEspecie === 'function' ? getEspecie(especieIdLegacy) : null;
     })();
 
+  // Sugerencia (motor-observacion.js#obtenerSugerenciaCultivo): se calcula
+  // ACÁ, antes de armar el HTML, para decidir si la sección entera existe o
+  // no — si no hay ninguna sugerencia pertinente ahora mismo, la sección no
+  // se muestra (ni el título "Sugerencia" ni nada debajo), en vez de dejar
+  // un <section> vacío que igual sumaría un espacio en blanco por el CSS de
+  // separación entre secciones. "No mostrar nada" es preferible a inventar
+  // un texto de relleno genérico.
+  const sugerenciaInicial = cultivo.estado !== 'finalizado'
+    ? obtenerSugerenciaCultivo(cultivo, eventos, new Date(), config.hemisferio, {})
+    : null;
+
   root.innerHTML = `
     <div class="detalle-hero">
       <div class="detalle-hero-photo" style="${fotoUrl ? `background-image:url('${fotoUrl}')` : ''}">
@@ -91,8 +102,9 @@ async function renderDetalle(id, root) {
 
     ${cultivo.estado !== 'finalizado' && resumen.cosechas ? `<section id="produccion-section"></section>` : ''}
 
-    ${cultivo.estado !== 'finalizado' ? `
+    ${sugerenciaInicial ? `
     <section>
+      <div class="section-title">Sugerencia</div>
       <div id="sugerencia-observacion"></div>
     </section>` : ''}
 
@@ -185,14 +197,15 @@ async function renderDetalle(id, root) {
     });
   }
 
-  // Recibir una sugerencia: motor local, sin IA — botón voluntario, nunca
-  // protagonista de la pantalla. Un toque = una pregunta = una interacción
-  // completa (ver pintarSugerenciaObservacion más abajo). "Registrar lo
-  // que veo" refresca la ficha al guardar, para que la observación quede
-  // en el Historial; "Otra sugerencia" nunca se encadena sola.
+  // Sugerencia: motor local, sin IA — siempre visible cuando hay algo
+  // pertinente que mostrar (ver pintarSugerenciaObservacion más abajo), en
+  // vez de escondida detrás de un botón como antes. "Registrar algo"
+  // refresca la ficha al guardar, para que la observación quede en el
+  // Historial; "Otra sugerencia" nunca se encadena sola — cada toque es una
+  // interacción completa y separada, nunca un cuestionario.
   const sugerenciaWrap = root.querySelector('#sugerencia-observacion');
   if (sugerenciaWrap) {
-    pintarSugerenciaObservacion(sugerenciaWrap, cultivo, eventos, config, () => renderDetalle(id, root));
+    pintarSugerenciaObservacion(sugerenciaWrap, cultivo, eventos, config, () => renderDetalle(id, root), sugerenciaInicial);
   }
 
   // Fotos: minibiblioteca visual del cultivo (primeras 6, sin duplicar nada)
@@ -1019,53 +1032,59 @@ function abrirSugerenciaRecordatorioStandalone(cultivoId, sugerencia, onDone) {
 }
 
 // ---------------------------------------------------------------------
-// Recibir una sugerencia — capa de presentación del motor de observación
+// Sugerencia — capa de presentación del motor de observación
 // (motor-observacion.js#obtenerSugerenciaCultivo). A propósito NO es un
-// cuestionario ni una sesión guiada: cada toque es una interacción
-// completa y separada — un botón, una pregunta, listo. Nunca se encadena
-// automáticamente a una siguiente pregunta (ni siquiera después de
-// guardar una observación), y nunca se muestra "Pregunta 1 de N". Esta
-// sección no contiene ninguna lógica agronómica propia: solo pinta lo que
-// el motor decide.
+// cuestionario ni una sesión guiada: se muestra UNA sola sugerencia por
+// vez, nunca una lista ni "1 de N". "Otra sugerencia" y "Ocultar" son cada
+// una una interacción completa y separada — nunca se encadenan solas (ni
+// siquiera después de guardar una observación). Esta sección no contiene
+// ninguna lógica agronómica propia: solo pinta lo que el motor decide, y
+// si el motor no tiene nada pertinente para mostrar, el llamador
+// (renderDetalle) directamente no arma esta sección — ver
+// sugerenciaInicial más arriba.
 // ---------------------------------------------------------------------
 
-// wrap: contenedor de la sección. onDone: se llama cuando conviene
-// refrescar la ficha completa (después de guardar una observación, para
-// que quede reflejada en Historial).
-function pintarSugerenciaObservacion(wrap, cultivo, eventos, config, onDone) {
-  function pintarBoton() {
-    wrap.innerHTML = `
-      <button type="button" id="btn-recibir-sugerencia" class="link-ver-todas">${renderIcon('observacion', { scale: 'xs' })} Recibir una sugerencia</button>
-    `;
-    wrap.querySelector('#btn-recibir-sugerencia').addEventListener('click', () => mostrarSugerencia([]));
-  }
-
+// wrap: contenedor de la tarjeta (el título "Sugerencia" vive afuera, en
+// el template de renderDetalle, porque su presencia ya decide si toda la
+// sección existe). onDone: se llama cuando conviene refrescar la ficha
+// completa (después de guardar una observación, para que quede reflejada
+// en Historial). sugerenciaInicial: ya calculada por renderDetalle antes
+// de armar el HTML — evita recalcularla (y potencialmente desempatar al
+// azar distinto) apenas se pinta la tarjeta por primera vez.
+function pintarSugerenciaObservacion(wrap, cultivo, eventos, config, onDone, sugerenciaInicial) {
   // excluirIds: ids a evitar en ESTE pedido puntual (se usa desde "Otra
   // sugerencia", para no repetir la que se acaba de mostrar). La memoria
   // entre visitas (cultivo.sugerenciasRecientes) la aplica el motor por su
   // cuenta — acá solo la persistimos cuando se muestra algo nuevo.
-  async function mostrarSugerencia(excluirIds) {
-    const sugerencia = obtenerSugerenciaCultivo(cultivo, eventos, new Date(), config.hemisferio, { excluirIds });
+  async function pintarSugerencia(sugerencia, excluirIds) {
     if (!sugerencia) {
-      pintarVacio();
+      // Ya no queda ninguna candidata distinta ("Otra sugerencia" agotó
+      // las disponibles): preferimos no mostrar nada antes que repetir o
+      // inventar un texto de relleno.
+      wrap.innerHTML = '';
       return;
     }
 
     // Guardamos un rastro corto (hasta 6 ids) para que la próxima vez que
     // se pida una sugerencia — hoy o en otra visita — el motor evite
-    // repetir lo último mostrado (punto 8 y 25 del pedido: sin subsistema
-    // nuevo, un campo más sobre el registro de cultivo que ya existía).
+    // repetir lo último mostrado. Mismo campo que ya existía sobre el
+    // registro de cultivo (sin subsistema nuevo), y también es lo que hace
+    // que "Ocultar" (ver más abajo) no reaparezca de inmediato: al haberse
+    // mostrado, ya queda excluida las próximas veces.
     const recientes = [sugerencia.idPregunta, ...(Array.isArray(cultivo.sugerenciasRecientes) ? cultivo.sugerenciasRecientes : [])].slice(0, 6);
     cultivo.sugerenciasRecientes = recientes;
     await DB.updateCultivo(cultivo.id, { sugerenciasRecientes: recientes });
 
     wrap.innerHTML = `
       <div class="sugerencia-card">
-        <div class="sugerencia-titulo">Una cosa que podrías mirar 👀</div>
         <div class="sugerencia-pregunta">${escapeHtml(sugerencia.pregunta)}</div>
         <div class="sugerencia-botones">
-          <button type="button" id="btn-registrar-sugerencia" class="btn-primary">Registrar lo que veo</button>
-          <button type="button" id="btn-otra-sugerencia" class="link-ver-todas">Otra sugerencia</button>
+          <button type="button" id="btn-registrar-sugerencia" class="btn-primary">Registrar algo</button>
+          <div class="sugerencia-acciones-secundarias">
+            <button type="button" id="btn-otra-sugerencia" class="link-ver-todas">Otra sugerencia</button>
+            <span class="sugerencia-separador">·</span>
+            <button type="button" id="btn-ocultar-sugerencia" class="link-ver-todas">Ocultar</button>
+          </div>
         </div>
       </div>
     `;
@@ -1076,23 +1095,20 @@ function pintarSugerenciaObservacion(wrap, cultivo, eventos, config, onDone) {
       // Nunca auto-encadenada: es un toque explícito más, igual que el
       // primero. Evitamos repetir la que se acaba de mostrar sumándola a
       // la exclusión de este pedido puntual.
-      mostrarSugerencia([sugerencia.idPregunta, ...excluirIds]);
+      const excluirAhora = [sugerencia.idPregunta, ...excluirIds];
+      const siguiente = obtenerSugerenciaCultivo(cultivo, eventos, new Date(), config.hemisferio, { excluirIds: excluirAhora });
+      pintarSugerencia(siguiente, excluirAhora);
+    });
+    wrap.querySelector('#btn-ocultar-sugerencia').addEventListener('click', () => {
+      // Ocultar no trae una sugerencia distinta (eso es "Otra sugerencia"):
+      // simplemente la retira. Como ya quedó agregada a
+      // cultivo.sugerenciasRecientes arriba, no va a reaparecer de
+      // inmediato la próxima vez que se entre a esta ficha.
+      wrap.innerHTML = `<p class="sugerencia-oculta-nota">Listo, no te la muestro más por ahora.</p>`;
     });
   }
 
-  function pintarVacio() {
-    wrap.innerHTML = `
-      <div class="sugerencia-vacio">
-        <p>Por ahora no tengo una sugerencia específica para este momento. Podés registrar libremente cualquier cambio que notes.</p>
-        <button type="button" id="btn-registrar-libre" class="link-ver-todas">Registrar observación</button>
-      </div>
-    `;
-    wrap.querySelector('#btn-registrar-libre').addEventListener('click', () => {
-      openEventoModal(cultivo.id, () => { if (onDone) onDone(); });
-    });
-  }
-
-  pintarBoton();
+  pintarSugerencia(sugerenciaInicial, []);
 }
 
 // Vista completa: todas las fotos del cultivo en una cuadrícula.

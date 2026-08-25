@@ -12,12 +12,22 @@ async function renderInicio(root) {
   const activos = cultivos.filter((c) => c.estado === 'activo');
   const paraHoy = recordatorios.filter((r) => esParaHoy(r.fecha));
 
+  // "Sugerencia para hoy": la mejor sugerencia entre TODOS los cultivos
+  // activos (motor-observacion.js#getSugerenciaDestacada — nunca el
+  // primer/último/random cultivo). Se calcula ACÁ, antes de armar el HTML,
+  // por la misma razón que en detalle.js: si no hay ninguna, la sección
+  // entera no existe (ni título ni nada), en vez de dejar un <section>
+  // vacío o un texto de relleno genérico.
+  const destacada = await getSugerenciaDestacada(activos, config.hemisferio);
+
   // Deliberadamente NO hay ninguna señal acá sobre "hace cuánto no
   // observás" un cultivo, ni cuenta de observaciones pendientes: Inicio no
   // debe generar sensación de deuda. Los únicos recordatorios que se
   // asoman acá son los que la persona creó explícitamente (paraHoy) — la
   // observación en sí es siempre voluntaria y vive en la ficha de cada
-  // cultivo ("🌱 Recibir una sugerencia", ver detalle.js).
+  // cultivo. La sugerencia destacada de acá abajo sigue el mismo espíritu:
+  // es algo que podría interesar mirar, nunca una tarea pendiente — por
+  // eso no lleva badge, contador, ni color de alerta.
   let resumen;
   if (!cultivos.length) {
     resumen = 'Registrá tu primer cultivo para empezar';
@@ -49,6 +59,12 @@ async function renderInicio(root) {
       </div>
       <div id="activos-list"></div>
     </section>
+
+    ${destacada ? `
+    <section>
+      <div class="section-title">Sugerencia para hoy</div>
+      <div id="sugerencia-destacada"></div>
+    </section>` : ''}
 
     <section>
       <div class="section-title">Últimos movimientos</div>
@@ -118,6 +134,24 @@ async function renderInicio(root) {
     activosList.innerHTML = `<div class="cultivos-grid">${cards.join('')}</div>`;
     activosList.querySelectorAll('.cultivo-card').forEach((card) => {
       card.addEventListener('click', () => navigate(`#/cultivo/${card.dataset.id}`));
+    });
+  }
+
+  // Sugerencia para hoy: una sola tarjeta, sin acciones de "otra
+  // sugerencia"/"ocultar" (esas viven solo en la ficha del cultivo — ver
+  // detalle.js). "Ver cultivo" abre directamente esa ficha: no existe (ni
+  // se crea acá) ninguna pantalla nueva de "sugerencias".
+  if (destacada) {
+    const destacadaWrap = root.querySelector('#sugerencia-destacada');
+    destacadaWrap.innerHTML = `
+      <div class="sugerencia-card sugerencia-destacada">
+        <div class="sugerencia-destacada-cultivo">${escapeHtml(destacada.cultivoNombre)}</div>
+        <div class="sugerencia-pregunta">${escapeHtml(destacada.pregunta)}</div>
+        <button type="button" id="btn-ver-cultivo-destacado" class="btn-secondary">Ver cultivo</button>
+      </div>
+    `;
+    destacadaWrap.querySelector('#btn-ver-cultivo-destacado').addEventListener('click', () => {
+      navigate(`#/cultivo/${destacada.cultivoId}`);
     });
   }
 

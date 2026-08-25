@@ -1423,6 +1423,42 @@ button.link-ver-todas:active { transform: scale(0.98); }
 .sugerencia-botones .btn-primary { width: 100%; }
 .sugerencia-botones .link-ver-todas { text-align: center; }
 
+/* "Otra sugerencia · Ocultar" — fila secundaria bajo el botón principal,
+   ver views/detalle.js#pintarSugerenciaObservacion. */
+.sugerencia-acciones-secundarias {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+.sugerencia-separador { color: var(--texto-suave); font-size: 12px; }
+
+/* Nota que queda tras tocar "Ocultar" — a propósito sin botones: ocultar
+   es un cierre, no una oferta de otra acción (esa es "Otra sugerencia"). */
+.sugerencia-oculta-nota {
+  font-size: 13px;
+  color: var(--texto-suave);
+  padding: 10px 2px 2px;
+  margin: 0;
+}
+
+/* "Sugerencia para hoy" (Inicio) — misma .sugerencia-card de la ficha, con
+   el nombre del cultivo agregado arriba y un botón "Ver cultivo" en vez de
+   registrar/otra sugerencia/ocultar (esas viven solo en la ficha). A
+   propósito sin badge, contador ni color de alerta: no debe sentirse como
+   una tarea pendiente. */
+.sugerencia-destacada-cultivo {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--texto-suave);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+}
+.sugerencia-destacada .sugerencia-pregunta { margin-bottom: 12px; }
+.sugerencia-destacada .btn-secondary { width: 100%; }
+
 .sugerencia-vacio {
   text-align: center;
   padding: 14px 10px;
