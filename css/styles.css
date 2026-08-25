@@ -440,6 +440,76 @@ section + section { margin-top: 20px; }
 .cultivo-pick-especie { font-weight: 700; font-size: 14px; }
 .cultivo-pick-variedad { font-size: 12px; color: var(--texto-suave); }
 
+/* ---------- Selección múltiple de cultivos (Riego múltiple) ----------
+   Misma lista contenedora que arriba (.cultivo-pick-list, reutilizada tal
+   cual), pero cada fila es un toggle en vez de una navegación a un paso
+   2 — por eso el ítem lleva su propio estilo: target táctil grande (la
+   fila entera es el botón, no un checkbox chico) y un indicador de
+   marcado bien visible a la derecha. */
+.cultivo-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  padding: 12px 14px;
+  transition: transform 0.1s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+.cultivo-select-item:active { transform: scale(0.98); }
+.cultivo-select-item.selected { background: var(--verde-suave); border-color: var(--verde); }
+.cultivo-select-info { display: flex; flex-direction: column; min-width: 0; }
+.cultivo-select-especie { font-weight: 700; font-size: 14px; }
+.cultivo-select-variedad { font-size: 12px; color: var(--texto-suave); }
+.cultivo-select-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--borde);
+  flex-shrink: 0;
+  position: relative;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.cultivo-select-item.selected .cultivo-select-check { background: var(--verde); border-color: var(--verde); }
+.cultivo-select-item.selected .cultivo-select-check::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 4px;
+  width: 6px;
+  height: 11px;
+  border: solid var(--crema);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.rm-seleccion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--texto-suave);
+  margin: 2px 0 10px;
+}
+/* Regla propia en vez de reusar .link-small: ese estilo solo definía el
+   color/tamaño para cuando vive DENTRO de .section-title (siempre sobre
+   <a>/<label>, sin chrome de navegador que resetear) — acá es un
+   <button>, que sin reset propio se ve con el fondo/borde por defecto del
+   navegador. */
+.rm-todos-btn {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--verde);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.rm-espacios { margin-bottom: 10px; }
+
 /* Botón compacto de foto para el flujo rápido: una fila, no un cuadrado
    grande — así el paso de la foto no alarga el flujo. */
 .photo-picker-compacta {
@@ -554,6 +624,40 @@ section + section { margin-top: 20px; }
   transition: transform 0.1s ease, background-color 0.15s ease;
 }
 .pill-btn:active { transform: scale(0.93); background: var(--verde-suave); }
+
+/* ---------- Últimos movimientos (Inicio) ----------
+   Mismo lenguaje visual que .reminder-item de arriba (fila con ícono +
+   título + subtítulo, misma tarjeta/sombra), pero la fila entera es un
+   <button> tocable en vez de tener una acción aparte — acá no hay nada
+   que completar/posponer, solo abrir. */
+.movimiento-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: var(--crema-card);
+  border-radius: var(--radio-chico);
+  padding: 12px 14px;
+  box-shadow: var(--sombra);
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+.movimiento-item + .movimiento-item { margin-top: 8px; }
+.movimiento-item:active { transform: scale(0.98); background: var(--verde-suave); }
+.movimiento-icono {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+  color: var(--verde);
+}
+.movimiento-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.movimiento-titulo { font-weight: 600; font-size: 14px; }
+.movimiento-sub { font-size: 12px; color: var(--texto-suave); margin-top: 2px; }
+.movimientos-vacio { font-size: 13px; color: var(--texto-suave); margin: 0; }
 
 /* ---------- Cultivo cards ---------- */
 .cultivos-grid {

@@ -79,13 +79,18 @@ function navigate(hash) {
 }
 
 // Bottom sheet del botón "＋ Registrar" del nav inferior: la acción más
-// frecuente (observación) va primero, crear cultivo queda como opción chica.
+// frecuente (observación) va primero. "Riego múltiple" (ver
+// views/riego-multiple.js) va segundo — mejora pedida explícitamente por
+// uso real en la huerta, para el caso de regar varios cultivos a la vez
+// sin tener que cargarlos uno por uno. Crear cultivo queda como opción
+// chica, es la menos frecuente de las tres.
 async function openRegistrarSheet() {
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
       <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
       <h2>Registrar</h2>
       <button id="sheet-observacion" class="btn-primary" style="margin-bottom:10px;">${renderIcon('observacion', { scale: 'sm' })} Registrar observación</button>
+      <button id="sheet-riego" class="btn-secondary" style="margin-bottom:10px;">💧 Riego múltiple</button>
       <button id="sheet-nuevo-cultivo" class="btn-secondary">＋ Nuevo cultivo</button>
     </div>
   `);
@@ -96,6 +101,11 @@ async function openRegistrarSheet() {
     close();
     const cultivos = await DB.getAllCultivos();
     openObservacionRapida(cultivos);
+  });
+
+  backdrop.querySelector('#sheet-riego').addEventListener('click', () => {
+    close();
+    openRiegoMultiple();
   });
 
   backdrop.querySelector('#sheet-nuevo-cultivo').addEventListener('click', () => {

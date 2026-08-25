@@ -18,6 +18,17 @@ const TIPO_INICIO_LABELS = {
 // para "completar" la lista.
 const EVENTO_TIPOS = [
   { value: 'siembra', label: 'Siembra', icon: '🌰', iconSvg: 'siembra' },
+  // 'riego': tipo agregado a pedido explícito del usuario (mejora "Riego
+  // masivo / riego múltiple") — hasta acá no existía como tipo de evento
+  // en absoluto, ni individual ni de ningún otro modo. Solo emoji, mismo
+  // criterio que baja/floración/reactivación/otro: no hay ícono de la
+  // lámina que represente "riego" sin forzarlo. Se registra igual que
+  // cualquier otro evento (Tomate → ＋ Evento → Riego, ver
+  // views/detalle.js#openEventoModal, sin cambios de código ahí más que
+  // este agregado a la lista) — "riego múltiple"
+  // (views/riego-multiple.js) es solo un atajo que crea varios eventos de
+  // este mismo tipo de una vez, nunca una entidad distinta.
+  { value: 'riego', label: 'Riego', icon: '💧' },
   { value: 'observacion', label: 'Observación', icon: '👁️', iconSvg: 'observacion' },
   { value: 'revision', label: 'Revisión guiada', icon: '🔍', iconSvg: 'buscar' },
   { value: 'fotografia', label: 'Fotografía', icon: '📷', iconSvg: 'foto' },
@@ -159,6 +170,38 @@ function isVencido(fechaIso) {
 // true si un recordatorio "toca hoy": ya venció o es para hoy mismo.
 function esParaHoy(fechaIso) {
   return fechaIso <= todayIsoDate();
+}
+
+// Comparador reutilizable de eventos: más nuevo primero, por la FECHA REAL
+// del acontecimiento (evento.fecha, 'YYYY-MM-DD') — nunca por createdAt
+// como criterio principal. Ejemplo (punto explícito del pedido de
+// "Últimos movimientos"): cargar hoy una observación de 2022 no debe
+// hacerla aparecer como el movimiento más reciente solo porque se
+// escribió hoy — tiene que ordenarse por 2022. createdAt (timestamp real
+// de carga) solo desempata cuando dos eventos comparten la misma fecha de
+// calendario, y el id autoincremental es el último desempate, para que el
+// orden sea siempre determinístico. Usado por DB.getEventosByCultivo
+// (historial de un cultivo) y getUltimosMovimientos (motor-movimientos.js,
+// Inicio) — un único lugar para esta regla, para que las dos vistas
+// ordenen exactamente igual.
+function compararEventosPorFecha(a, b) {
+  const porFecha = parseLocalDate(b.fecha) - parseLocalDate(a.fecha);
+  if (porFecha !== 0) return porFecha;
+  const porCreacion = new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+  if (porCreacion !== 0) return porCreacion;
+  return (b.id || 0) - (a.id || 0);
+}
+
+// Identificador liviano y opaco para agrupar varios eventos creados en una
+// misma acción (ej. riego múltiple — ver views/riego-multiple.js). Vive en
+// evento.batchId, un campo opcional genérico (no exclusivo de riego: a
+// futuro podría usarse para cobertura, compost, u otra acción grupal, sin
+// ningún cambio de esquema). No es un id de ningún store de IndexedDB, ni
+// se muestra nunca en la interfaz — es solo el dato que le permite a
+// getUltimosMovimientos() (motor-movimientos.js) saber que varios eventos
+// vienen de una misma acción y mostrarlos agrupados en vez de repetidos.
+function generarBatchId() {
+  return `batch_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
 // Texto relativo compacto para fechas pasadas: Hoy / Ayer / Hace N días.

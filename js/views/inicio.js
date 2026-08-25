@@ -50,6 +50,11 @@ async function renderInicio(root) {
       <div id="activos-list"></div>
     </section>
 
+    <section>
+      <div class="section-title">Últimos movimientos</div>
+      <div id="movimientos-list"></div>
+    </section>
+
     <section id="temporada-section"></section>
   `;
 
@@ -113,6 +118,55 @@ async function renderInicio(root) {
     activosList.innerHTML = `<div class="cultivos-grid">${cards.join('')}</div>`;
     activosList.querySelectorAll('.cultivo-card').forEach((card) => {
       card.addEventListener('click', () => navigate(`#/cultivo/${card.dataset.id}`));
+    });
+  }
+
+  // Últimos movimientos: memoria reciente de la huerta, no un historial
+  // completo (para eso ya existe el historial por cultivo). Toda la
+  // lógica de orden/agrupamiento vive en getUltimosMovimientos()
+  // (motor-movimientos.js) — acá solo se pinta lo que esa función ya
+  // devuelve resuelto.
+  const movimientosList = root.querySelector('#movimientos-list');
+  const movimientos = await getUltimosMovimientos(5);
+  if (!movimientos.length) {
+    movimientosList.innerHTML = `<p class="movimientos-vacio">Todavía no hay movimientos registrados.</p>`;
+  } else {
+    movimientosList.innerHTML = movimientos
+      .map((m) => {
+        const icono = eventoIcon(m.tipo);
+        if (m.batch) {
+          return `
+            <button type="button" class="movimiento-item" data-batch="1">
+              <span class="movimiento-icono">${icono}</span>
+              <span class="movimiento-info">
+                <span class="movimiento-titulo">${escapeHtml(eventoLabel(m.tipo))} · ${m.count} cultivos</span>
+                <span class="movimiento-sub">${textoRelativo(m.fecha)}</span>
+              </span>
+            </button>
+          `;
+        }
+        return `
+          <button type="button" class="movimiento-item" data-cultivo-id="${m.cultivoId}">
+            <span class="movimiento-icono">${icono}</span>
+            <span class="movimiento-info">
+              <span class="movimiento-titulo">${escapeHtml(m.cultivoNombre)}</span>
+              <span class="movimiento-sub">${escapeHtml(eventoLabel(m.tipo))} · ${textoRelativo(m.fecha)}</span>
+            </span>
+          </button>
+        `;
+      })
+      .join('');
+
+    // Un movimiento agrupado (riego múltiple, ver views/riego-multiple.js)
+    // no tiene una única ficha a la que llevar — abre "Mis cultivos", el
+    // destino existente más natural (punto explícito del pedido: no crear
+    // una pantalla nueva solo para esto). Un movimiento individual abre la
+    // ficha del cultivo, como cualquier otro acceso a un cultivo en la app.
+    movimientosList.querySelectorAll('.movimiento-item').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.batch) navigate('#/cultivos');
+        else navigate(`#/cultivo/${btn.dataset.cultivoId}`);
+      });
     });
   }
 

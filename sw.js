@@ -11,7 +11,7 @@
 // (ej. la pantalla de Configuración) NO tiene su propia copia del número:
 // lo consulta en tiempo de ejecución mandándole un mensaje a este Service
 // Worker (ver utils.js#obtenerVersionApp). Una sola fuente de verdad real.
-const APP_VERSION = '1.14.0';
+const APP_VERSION = '1.15.0';
 
 const CACHE_NAME = `cultivarnos-v${APP_VERSION}`;
 const APP_SHELL = [
@@ -32,6 +32,7 @@ const APP_SHELL = [
   './js/motor-siembra.js',
   './js/motor-cosecha.js',
   './js/motor-espacios.js',
+  './js/motor-movimientos.js',
   './js/motor-resumen.js',
   './js/motor-tarjeta.js',
   './js/views/inicio.js',
@@ -48,6 +49,7 @@ const APP_SHELL = [
   './js/views/banco.js',
   './js/views/banco-nuevo.js',
   './js/views/banco-detalle.js',
+  './js/views/riego-multiple.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',

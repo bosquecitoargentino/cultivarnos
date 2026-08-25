@@ -1291,6 +1291,7 @@ function openEventoModal(cultivoId, onSaved, opts) {
   // 'observacion' (o pasa a 'fotografia' automáticamente al agregar una
   // foto, más abajo), así que acá no hay nada que conectar.
   const tipoGroup = backdrop.querySelector('#ev-tipo');
+  const fechaInput = backdrop.querySelector('#ev-fecha');
   if (tipoGroup) {
     tipoGroup.addEventListener('click', (e) => {
       const chip = e.target.closest('.chip-option');
@@ -1300,6 +1301,12 @@ function openEventoModal(cultivoId, onSaved, opts) {
       tipoSeleccionado = chip.dataset.value;
       cosechaSection.classList.toggle('hidden', tipoSeleccionado !== 'cosecha');
       if (tipoSeleccionado === 'cosecha') inicializarCosechaSection();
+      // Riego es siempre "algo que ya pasó" (punto explícito del pedido de
+      // Riego múltiple, aplicado acá también al riego individual para que
+      // ambos caminos se comporten igual): no tiene sentido cargar un
+      // riego a futuro. El resto de los tipos no cambia — no se toca su
+      // comportamiento existente.
+      fechaInput.max = tipoSeleccionado === 'riego' ? todayIsoDate() : '';
     });
   }
 
@@ -1351,7 +1358,10 @@ function openEventoModal(cultivoId, onSaved, opts) {
   });
 
   backdrop.querySelector('#ev-guardar').addEventListener('click', async () => {
-    const fecha = backdrop.querySelector('#ev-fecha').value || todayIsoDate();
+    let fecha = backdrop.querySelector('#ev-fecha').value || todayIsoDate();
+    // Defensa además del `max` del input (arriba): un riego ya realizado
+    // no puede quedar fechado a futuro aunque el valor llegue manipulado.
+    if (tipoSeleccionado === 'riego' && fecha > todayIsoDate()) fecha = todayIsoDate();
     const nota = backdrop.querySelector('#ev-nota').value.trim();
 
     let fotoId = null;

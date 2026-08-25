@@ -128,22 +128,20 @@ const DB = {
     const store = await tx('eventos');
     const index = store.index('cultivoId');
     const result = await reqToPromise(index.getAll(IDBKeyRange.only(cultivoId)));
-    // Más nuevo primero. `fecha` es un día (sin hora), así que varios
-    // eventos cargados el mismo día empatan ahí — desempatamos con
-    // createdAt (timestamp real de carga) y, como último recurso, el id
-    // autoincremental, para que el orden sea siempre determinístico y
-    // realmente cronológico entre eventos del mismo día.
-    return result.sort((a, b) => {
-      // fecha es 'YYYY-MM-DD' (fecha calendario): parseLocalDate evita el
-      // corrimiento de día de `new Date(fecha)` en husos negativos como
-      // Argentina (ver utils.js). createdAt SÍ es timestamp completo, se
-      // compara tal cual con new Date().
-      const porFecha = parseLocalDate(b.fecha) - parseLocalDate(a.fecha);
-      if (porFecha !== 0) return porFecha;
-      const porCreacion = new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-      if (porCreacion !== 0) return porCreacion;
-      return (b.id || 0) - (a.id || 0);
-    });
+    // Más nuevo primero, por fecha real del acontecimiento — ver
+    // compararEventosPorFecha (utils.js) para el criterio completo y por
+    // qué NO es simplemente createdAt.
+    return result.sort(compararEventosPorFecha);
+  },
+
+  // Todos los eventos de todos los cultivos, sin filtrar — base para
+  // getUltimosMovimientos() (motor-movimientos.js, Inicio) y para
+  // exportAll()/deleteEventoCompleto()/deleteCultivoCompleto() de acá
+  // abajo, que antes repetían este mismo `tx('eventos'); getAll()` cada
+  // una por su lado.
+  async getAllEventos() {
+    const store = await tx('eventos');
+    return reqToPromise(store.getAll());
   },
 
   async updateEvento(id, changes) {
@@ -158,6 +156,32 @@ const DB = {
   async deleteEvento(id) {
     const store = await tx('eventos', 'readwrite');
     return reqToPromise(store.delete(id));
+  },
+
+  // Crea varios eventos de una sola vez, todos en UNA MISMA transacción de
+  // IndexedDB (ej. "Riego múltiple" — ver views/riego-multiple.js). Esto
+  // es lo que garantiza el punto explícito del pedido "no dejar
+  // silenciosamente 7 de 12 eventos creados sin explicarlo": si cualquiera
+  // de los `add()` falla, la transacción entera aborta sola (comportamiento
+  // estándar de IndexedDB) y ninguno de los eventos queda guardado — no
+  // hace falta ningún rollback manual, es todo o nada por construcción.
+  // `eventosData` son objetos de evento SIN id/createdAt (igual que
+  // addEvento); devuelve los ids creados, en el mismo orden.
+  async addEventosMultiples(eventosData) {
+    const db = await openDB();
+    const t = db.transaction('eventos', 'readwrite');
+    const store = t.objectStore('eventos');
+    const now = new Date().toISOString();
+    const ids = [];
+    eventosData.forEach((data) => {
+      const req = store.add({ ...data, createdAt: now });
+      req.onsuccess = () => ids.push(req.result);
+    });
+    return new Promise((resolve, reject) => {
+      t.oncomplete = () => resolve(ids);
+      t.onerror = () => reject(t.error);
+      t.onabort = () => reject(t.error || new Error('No se pudo guardar el riego múltiple'));
+    });
   },
 
   // ---------- BORRADO CENTRALIZADO (evita fotos huérfanas) ----------
@@ -175,7 +199,7 @@ const DB = {
     const [evento, cultivos, todosLosEventos] = await Promise.all([
       (async () => { const s = await tx('eventos'); return reqToPromise(s.get(id)); })(),
       this.getAllCultivos(),
-      (async () => { const s = await tx('eventos'); return reqToPromise(s.getAll()); })(),
+      this.getAllEventos(),
     ]);
     if (!evento) return false;
 
@@ -212,7 +236,7 @@ const DB = {
       this.getEventosByCultivo(id),
       this.getRecordatoriosByCultivo(id),
       this.getAllCultivos(),
-      (async () => { const s = await tx('eventos'); return reqToPromise(s.getAll()); })(),
+      this.getAllEventos(),
     ]);
     if (!cultivo) return false;
 
@@ -394,10 +418,7 @@ const DB = {
   async exportAll() {
     const [cultivos, eventos, recordatorios, configuracion, conversaciones, lotesPropagacion] = await Promise.all([
       this.getAllCultivos(),
-      (async () => {
-        const store = await tx('eventos');
-        return reqToPromise(store.getAll());
-      })(),
+      this.getAllEventos(),
       (async () => {
         const store = await tx('recordatorios');
         return reqToPromise(store.getAll());
