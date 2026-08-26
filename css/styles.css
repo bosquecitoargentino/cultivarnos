@@ -964,32 +964,73 @@ section + section { margin-top: 20px; }
 .checkbox-row input { width: 20px; height: 20px; }
 
 /* ---------- Personalizar inicio ---------- */
-.home-layout-list { margin-top: 4px; }
+.home-layout-list { margin-top: 4px; position: relative; }
 .home-layout-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 0;
+  padding: 8px 0;
+  background: var(--crema, #fff);
 }
 .home-layout-row + .home-layout-row { border-top: 1px solid var(--borde); }
-.home-layout-mover { display: flex; flex-direction: column; gap: 2px; }
-.home-layout-flecha {
-  width: 30px;
-  height: 26px;
-  border-radius: var(--radio-chico);
-  border: 1px solid var(--borde);
-  background: #fff;
-  color: var(--verde-oscuro);
-  font-size: 14px;
-  line-height: 1;
-  transition: transform var(--motion-fast) var(--ease-soft), background-color var(--motion-fast) var(--ease-soft), opacity var(--motion-fast) var(--ease-soft);
-}
-.home-layout-flecha:active { transform: scale(0.9); background: var(--verde-suave); }
-.home-layout-flecha:disabled { opacity: 0.3; }
 .home-layout-label {
   flex: 1;
   font-size: 15px;
   font-weight: 500;
+}
+.home-layout-controles { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+/* ↑/↓ siguen siendo el camino accesible (teclado, lectores de pantalla),
+   pero visualmente pasan a segundo plano ahora que el handle de abajo es
+   la forma principal de reordenar en táctil. */
+.home-layout-mover-secundario { display: flex; gap: 2px; }
+.home-layout-mover-secundario .home-layout-flecha {
+  width: 24px;
+  height: 22px;
+  border-radius: var(--radio-chico);
+  border: none;
+  background: none;
+  color: var(--texto-suave);
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.55;
+  transition: transform var(--motion-fast) var(--ease-soft), background-color var(--motion-fast) var(--ease-soft), opacity var(--motion-fast) var(--ease-soft);
+}
+.home-layout-mover-secundario .home-layout-flecha:active { transform: scale(0.9); background: var(--verde-suave); opacity: 1; }
+.home-layout-mover-secundario .home-layout-flecha:disabled { opacity: 0.2; }
+/* El handle "≡": único punto desde el que arranca el arrastre (ver
+   habilitarArrastreHomeLayout en inicio.js). touch-action: none evita que
+   el navegador le dispute el gesto al JS (scroll/zoom) en iOS. */
+.home-layout-handle {
+  width: 36px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--texto-suave);
+  font-size: 20px;
+  line-height: 1;
+  border-radius: var(--radio-chico);
+  touch-action: none;
+  cursor: grab;
+  transition: background-color var(--motion-fast) var(--ease-soft);
+}
+.home-layout-handle:active { cursor: grabbing; background: var(--verde-suave); }
+/* La fila mientras se arrastra: elevación discreta, nada exagerado. */
+.home-layout-row-arrastrando {
+  z-index: 30;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.16);
+  border-radius: var(--radio-chico);
+  transform: scale(1.01);
+  opacity: 0.97;
+  user-select: none;
+}
+.home-layout-row-arrastrando + .home-layout-row { border-top: none; }
+/* El placeholder marca dónde va a quedar la fila si se suelta ahí. */
+.home-layout-placeholder {
+  border-radius: var(--radio-chico);
+  background: var(--verde-suave);
 }
 .home-layout-restaurar {
   display: block;

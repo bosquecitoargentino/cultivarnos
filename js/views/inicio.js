@@ -331,16 +331,20 @@ function abrirPersonalizarInicio() {
       .map((b, i) => {
         const primero = i === 0;
         const ultimo = i === layout.length - 1;
+        const etiqueta = escapeHtml(etiquetaBloqueHome(b.id));
         return `
           <div class="home-layout-row" data-id="${b.id}">
-            <div class="home-layout-mover">
-              <button type="button" class="home-layout-flecha" data-move="up" data-id="${b.id}" ${primero ? 'disabled' : ''} aria-label="Subir">↑</button>
-              <button type="button" class="home-layout-flecha" data-move="down" data-id="${b.id}" ${ultimo ? 'disabled' : ''} aria-label="Bajar">↓</button>
-            </div>
             <label class="home-layout-label checkbox-row">
               <input type="checkbox" class="home-layout-check" data-id="${b.id}" ${b.visible ? 'checked' : ''} />
-              ${escapeHtml(etiquetaBloqueHome(b.id))}
+              ${etiqueta}
             </label>
+            <div class="home-layout-controles">
+              <div class="home-layout-mover home-layout-mover-secundario">
+                <button type="button" class="home-layout-flecha" data-move="up" data-id="${b.id}" ${primero ? 'disabled' : ''} aria-label="Subir ${etiqueta}">↑</button>
+                <button type="button" class="home-layout-flecha" data-move="down" data-id="${b.id}" ${ultimo ? 'disabled' : ''} aria-label="Bajar ${etiqueta}">↓</button>
+              </div>
+              <button type="button" class="home-layout-handle" aria-hidden="true" tabindex="-1">≡</button>
+            </div>
           </div>
         `;
       })
@@ -360,10 +364,10 @@ function abrirPersonalizarInicio() {
 
   // El cambio se guarda al toque (guardarHomeLayout/restaurarHomeLayoutPorDefecto
   // dentro de cada handler de abajo), pero volver a pintar Inicio recién
-  // cuando el modal se cierra — no en cada toque de ↑/↓/checkbox mientras
-  // sigue abierto. Inicio queda tapado por el modal de todos modos, así que
-  // no hay necesidad de re-renderizarlo de fondo en cada micro-cambio; y
-  // evitarlo también evita re-computar la sugerencia destacada más seguido
+  // cuando el modal se cierra — no en cada toque de ↑/↓/checkbox/arrastre
+  // mientras sigue abierto. Inicio queda tapado por el modal de todos modos,
+  // así que no hay necesidad de re-renderizarlo de fondo en cada micro-cambio;
+  // y evitarlo también evita re-computar la sugerencia destacada más seguido
   // de lo necesario (ver motor-observacion.js#getSugerenciaDestacada, que
   // no se toca acá). El requisito de "se aplica de inmediato al volver a
   // Inicio" queda cubierto porque cerrar el modal siempre pasa por acá.
@@ -380,6 +384,9 @@ function abrirPersonalizarInicio() {
     sheet.querySelector('#home-layout-list').innerHTML = pintarFilas();
   }
 
+  // ↑/↓ siguen siendo el camino accesible (teclado, lectores de pantalla):
+  // el arrastre de abajo es un segundo camino, más natural en táctil, que
+  // nunca reemplaza a este.
   sheet.querySelector('#home-layout-list').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-move]');
     if (!btn || btn.disabled) return;
@@ -409,6 +416,211 @@ function abrirPersonalizarInicio() {
     restaurarHomeLayoutPorDefecto();
     refrescarLista();
   });
+
+  habilitarArrastreHomeLayout(sheet, refrescarLista);
+}
+
+// ---------------------------------------------------------------------
+// Arrastrar para reordenar (dentro de "Personalizar inicio"). Pointer
+// Events, no HTML5 Drag & Drop nativo — en Safari/iOS el nativo se siente
+// mal (arranca tarde, pelea con el scroll). Con Pointer Events el mismo
+// código cubre mouse y touch.
+//
+// El arrastre se inicia SOLO desde el handle "≡" de cada fila (nunca desde
+// el checkbox, el texto ni el resto de la fila), y solo se activa después
+// de un mantener-presionado corto o de un movimiento vertical claro — así
+// un toque accidental no reordena nada, y un gesto horizontal se descarta
+// en vez de forzar un movimiento que nadie pidió (el reordenamiento es
+// exclusivamente vertical). ↑/↓ (arriba) siguen intactos como camino
+// accesible — esto es una segunda forma de hacer lo mismo, no una
+// reemplaza a la otra.
+// ---------------------------------------------------------------------
+
+function habilitarArrastreHomeLayout(sheet, onSoltar) {
+  const listEl = sheet.querySelector('#home-layout-list');
+  const UMBRAL_MOVIMIENTO = 8; // px — para distinguir de un tap o de un gesto horizontal
+  const DEMORA_HOLD = 130; // ms — "mantener presionado", no un tap
+  const MARGEN_AUTOSCROLL = 42; // px desde el borde visible del modal
+  const VELOCIDAD_AUTOSCROLL = 12; // px por frame, mientras el dedo esté cerca del borde
+
+  let drag = null; // estado del arrastre activo, o null si no hay ninguno
+
+  listEl.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const handle = e.target.closest('.home-layout-handle');
+    if (!handle) return;
+    const fila = handle.closest('.home-layout-row');
+    if (!fila) return;
+    e.preventDefault();
+    prepararPosibleArrastre(e, fila);
+  });
+
+  function prepararPosibleArrastre(eInicial, fila) {
+    const pointerId = eInicial.pointerId;
+    const xInicial = eInicial.clientX;
+    const yInicial = eInicial.clientY;
+    let activado = false;
+    let descartado = false;
+
+    const timer = setTimeout(() => {
+      if (!descartado) activar();
+    }, DEMORA_HOLD);
+
+    function activar() {
+      if (activado || descartado) return;
+      activado = true;
+      comenzarArrastre(fila, yInicial);
+    }
+
+    function onMove(e) {
+      if (e.pointerId !== pointerId) return;
+      const dy = e.clientY - yInicial;
+      const dx = e.clientX - xInicial;
+      if (!activado) {
+        if (Math.abs(dy) > UMBRAL_MOVIMIENTO && Math.abs(dy) > Math.abs(dx)) {
+          clearTimeout(timer);
+          activar();
+        } else if (Math.abs(dx) > UMBRAL_MOVIMIENTO && Math.abs(dx) > Math.abs(dy)) {
+          // Gesto horizontal desde el handle: esto es solo vertical, se
+          // descarta en vez de forzar algo que no se pidió.
+          descartado = true;
+          clearTimeout(timer);
+          quitarListeners();
+        }
+        return;
+      }
+      if (drag) drag.ultimoClientY = e.clientY;
+    }
+
+    function onUp(e) {
+      if (e.pointerId !== pointerId) return;
+      clearTimeout(timer);
+      quitarListeners();
+      if (activado) finalizarArrastre();
+    }
+
+    function quitarListeners() {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+    }
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+  }
+
+  function comenzarArrastre(fila, clientY) {
+    const rect = fila.getBoundingClientRect();
+    const listRect = listEl.getBoundingClientRect();
+
+    // Un placeholder ocupa el lugar de la fila mientras esta "flota" — así
+    // el resto de la lista no se desarma, solo se corre para hacerle lugar.
+    const placeholder = document.createElement('div');
+    placeholder.className = 'home-layout-placeholder';
+    placeholder.style.height = rect.height + 'px';
+    fila.parentNode.insertBefore(placeholder, fila);
+
+    fila.classList.add('home-layout-row-arrastrando');
+    fila.style.position = 'absolute';
+    fila.style.left = (rect.left - listRect.left) + 'px';
+    fila.style.top = (rect.top - listRect.top) + 'px';
+    fila.style.width = rect.width + 'px';
+
+    drag = {
+      fila,
+      placeholder,
+      altura: rect.height,
+      offsetDentro: clientY - rect.top,
+      ultimoClientY: clientY,
+      rafId: null,
+    };
+    drag.rafId = requestAnimationFrame(paso);
+  }
+
+  function paso() {
+    if (!drag) return;
+    posicionarYReordenar(drag.ultimoClientY);
+    autoScroll(drag.ultimoClientY);
+    drag.rafId = requestAnimationFrame(paso);
+  }
+
+  function posicionarYReordenar(clientY) {
+    const listRect = listEl.getBoundingClientRect();
+    let top = clientY - listRect.top - drag.offsetDentro;
+    const maxTop = Math.max(0, listEl.scrollHeight - drag.altura);
+    top = Math.min(Math.max(top, 0), maxTop);
+    drag.fila.style.top = top + 'px';
+
+    // ¿A cuál fila (que no sea la que se arrastra) le pasamos por encima del
+    // centro? Ahí es donde va el placeholder — el resto de la lista se
+    // reacomoda solo, por ser flujo normal.
+    const centro = top + drag.altura / 2;
+    const filas = Array.from(listEl.querySelectorAll('.home-layout-row:not(.home-layout-row-arrastrando)'));
+    let destino = null;
+    for (const f of filas) {
+      if (centro < f.offsetTop + f.offsetHeight / 2) { destino = f; break; }
+    }
+    const siguienteActual = drag.placeholder.nextElementSibling;
+    if (destino !== siguienteActual && destino !== drag.placeholder) {
+      animarReacomodo(() => {
+        if (destino) listEl.insertBefore(drag.placeholder, destino);
+        else listEl.appendChild(drag.placeholder);
+      });
+    }
+  }
+
+  // FLIP chico: antes de mover el placeholder, mido dónde está cada fila;
+  // después de moverlo, si alguna fila cambió de posición la dejo animar
+  // desde donde estaba hasta donde quedó (120-180ms, sin rebote — mismas
+  // variables de motion que ya usa el resto de la app), en vez de que
+  // "salte" de golpe.
+  function animarReacomodo(mutar) {
+    const filas = Array.from(listEl.querySelectorAll('.home-layout-row:not(.home-layout-row-arrastrando)'));
+    const antes = new Map(filas.map((f) => [f, f.getBoundingClientRect().top]));
+    mutar();
+    filas.forEach((f) => {
+      const delta = antes.get(f) - f.getBoundingClientRect().top;
+      if (!delta) return;
+      f.style.transition = 'none';
+      f.style.transform = `translateY(${delta}px)`;
+      requestAnimationFrame(() => {
+        f.style.transition = 'transform var(--motion-base) var(--ease-soft)';
+        f.style.transform = '';
+      });
+    });
+  }
+
+  function autoScroll(clientY) {
+    const contRect = sheet.getBoundingClientRect();
+    if (clientY < contRect.top + MARGEN_AUTOSCROLL) {
+      sheet.scrollTop -= VELOCIDAD_AUTOSCROLL;
+    } else if (clientY > contRect.bottom - MARGEN_AUTOSCROLL) {
+      sheet.scrollTop += VELOCIDAD_AUTOSCROLL;
+    }
+  }
+
+  function finalizarArrastre() {
+    if (!drag) return;
+    cancelAnimationFrame(drag.rafId);
+    const { fila, placeholder } = drag;
+    listEl.insertBefore(fila, placeholder);
+    placeholder.remove();
+    fila.style.position = '';
+    fila.style.left = '';
+    fila.style.top = '';
+    fila.style.width = '';
+    fila.classList.remove('home-layout-row-arrastrando');
+
+    const idsEnOrden = Array.from(listEl.querySelectorAll('.home-layout-row')).map((f) => f.dataset.id);
+    const layoutActual = obtenerHomeLayout();
+    const porId = new Map(layoutActual.map((b) => [b.id, b]));
+    const nuevoLayout = idsEnOrden.map((id) => porId.get(id)).filter(Boolean);
+    guardarHomeLayout(nuevoLayout);
+
+    drag = null;
+    onSoltar();
+  }
 }
 
 // ---------------------------------------------------------------------
