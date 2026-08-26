@@ -156,18 +156,26 @@ async function renderInicio(root) {
   // sugerencia"/"ocultar" (esas viven solo en la ficha del cultivo — ver
   // detalle.js). "Ver cultivo" abre directamente esa ficha: no existe (ni
   // se crea acá) ninguna pantalla nueva de "sugerencias".
+  // Guard con "if (destacadaWrap)": este punto ya pasó por un `await`
+  // (Tus cultivos), así que si la persona navegó a otra pantalla justo en
+  // ese instante, `root` puede ya no ser el de Inicio. No es un caso de
+  // motion — es un guard defensivo general, mismo criterio que ya usa
+  // detalle.js para #sugerencia-observacion — para no intentar escribir
+  // sobre un nodo que otra vista ya reemplazó.
   if (destacada) {
     const destacadaWrap = root.querySelector('#sugerencia-destacada');
-    destacadaWrap.innerHTML = `
-      <div class="sugerencia-card sugerencia-destacada">
-        <div class="sugerencia-destacada-cultivo">${escapeHtml(destacada.cultivoNombre)}</div>
-        <div class="sugerencia-pregunta">${escapeHtml(destacada.pregunta)}</div>
-        <button type="button" id="btn-ver-cultivo-destacado" class="btn-secondary">Ver cultivo</button>
-      </div>
-    `;
-    destacadaWrap.querySelector('#btn-ver-cultivo-destacado').addEventListener('click', () => {
-      navigate(`#/cultivo/${destacada.cultivoId}`);
-    });
+    if (destacadaWrap) {
+      destacadaWrap.innerHTML = `
+        <div class="sugerencia-card sugerencia-destacada">
+          <div class="sugerencia-destacada-cultivo">${escapeHtml(destacada.cultivoNombre)}</div>
+          <div class="sugerencia-pregunta">${escapeHtml(destacada.pregunta)}</div>
+          <button type="button" id="btn-ver-cultivo-destacado" class="btn-secondary">Ver cultivo</button>
+        </div>
+      `;
+      destacadaWrap.querySelector('#btn-ver-cultivo-destacado').addEventListener('click', () => {
+        navigate(`#/cultivo/${destacada.cultivoId}`);
+      });
+    }
   }
 
   // Últimos movimientos: memoria reciente de la huerta, no un historial
@@ -177,89 +185,98 @@ async function renderInicio(root) {
   // devuelve resuelto.
   const movimientosList = root.querySelector('#movimientos-list');
   const movimientos = await getUltimosMovimientos(5);
-  if (!movimientos.length) {
-    movimientosList.innerHTML = `<p class="movimientos-vacio">Todavía no hay movimientos registrados.</p>`;
-  } else {
-    movimientosList.innerHTML = movimientos
-      .map((m) => {
-        const icono = eventoIcon(m.tipo);
-        if (m.batch) {
+  // Guard "if (movimientosList)": ya pasamos por dos await (Tus cultivos +
+  // este mismo) — si la persona navegó a otra pantalla en el medio, `root`
+  // puede ya no ser el de Inicio. No es un caso de motion, es defensivo
+  // (mismo criterio que el guard de la sugerencia destacada, arriba).
+  if (movimientosList) {
+    if (!movimientos.length) {
+      movimientosList.innerHTML = `<p class="movimientos-vacio">Todavía no hay movimientos registrados.</p>`;
+    } else {
+      movimientosList.innerHTML = movimientos
+        .map((m) => {
+          const icono = eventoIcon(m.tipo);
+          if (m.batch) {
+            return `
+              <button type="button" class="movimiento-item" data-batch="1">
+                <span class="movimiento-icono">${icono}</span>
+                <span class="movimiento-info">
+                  <span class="movimiento-titulo">${escapeHtml(eventoLabel(m.tipo))} · ${m.count} cultivos</span>
+                  <span class="movimiento-sub">${textoRelativo(m.fecha)}</span>
+                </span>
+              </button>
+            `;
+          }
           return `
-            <button type="button" class="movimiento-item" data-batch="1">
+            <button type="button" class="movimiento-item" data-cultivo-id="${m.cultivoId}">
               <span class="movimiento-icono">${icono}</span>
               <span class="movimiento-info">
-                <span class="movimiento-titulo">${escapeHtml(eventoLabel(m.tipo))} · ${m.count} cultivos</span>
-                <span class="movimiento-sub">${textoRelativo(m.fecha)}</span>
+                <span class="movimiento-titulo">${escapeHtml(m.cultivoNombre)}</span>
+                <span class="movimiento-sub">${escapeHtml(eventoLabel(m.tipo))} · ${textoRelativo(m.fecha)}</span>
               </span>
             </button>
           `;
-        }
-        return `
-          <button type="button" class="movimiento-item" data-cultivo-id="${m.cultivoId}">
-            <span class="movimiento-icono">${icono}</span>
-            <span class="movimiento-info">
-              <span class="movimiento-titulo">${escapeHtml(m.cultivoNombre)}</span>
-              <span class="movimiento-sub">${escapeHtml(eventoLabel(m.tipo))} · ${textoRelativo(m.fecha)}</span>
-            </span>
-          </button>
-        `;
-      })
-      .join('');
+        })
+        .join('');
 
-    // Un movimiento agrupado (riego múltiple, ver views/riego-multiple.js)
-    // no tiene una única ficha a la que llevar — abre "Mis cultivos", el
-    // destino existente más natural (punto explícito del pedido: no crear
-    // una pantalla nueva solo para esto). Un movimiento individual abre la
-    // ficha del cultivo, como cualquier otro acceso a un cultivo en la app.
-    movimientosList.querySelectorAll('.movimiento-item').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        if (btn.dataset.batch) navigate('#/cultivos');
-        else navigate(`#/cultivo/${btn.dataset.cultivoId}`);
+      // Un movimiento agrupado (riego múltiple, ver views/riego-multiple.js)
+      // no tiene una única ficha a la que llevar — abre "Mis cultivos", el
+      // destino existente más natural (punto explícito del pedido: no crear
+      // una pantalla nueva solo para esto). Un movimiento individual abre la
+      // ficha del cultivo, como cualquier otro acceso a un cultivo en la app.
+      movimientosList.querySelectorAll('.movimiento-item').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (btn.dataset.batch) navigate('#/cultivos');
+          else navigate(`#/cultivo/${btn.dataset.cultivoId}`);
+        });
       });
-    });
+    }
   }
 
   // Esta temporada: motor local, sin IA — solo lo que la biblioteca de
   // especies puede resolver de forma predecible según hemisferio y mes.
+  // Mismo guard defensivo que arriba.
   const temporadaSection = root.querySelector('#temporada-section');
-  if (!config.hemisferio) {
-    temporadaSection.innerHTML = `
-      <div class="section-title">${renderIcon('siembra', { scale: 'xs' })} Esta temporada</div>
-      <div class="temporada-prompt">
-        <span>Configurá tu hemisferio para ver qué podés sembrar ahora.</span>
-        <a href="#/configuracion" class="link-small">Configurar</a>
-      </div>
-    `;
-  } else {
-    const mesActual = new Date().getMonth() + 1;
-    const recomendaciones = obtenerRecomendacionesTemporada(config.hemisferio, mesActual);
-    if (!recomendaciones.length) {
+  if (temporadaSection) {
+    if (!config.hemisferio) {
       temporadaSection.innerHTML = `
         <div class="section-title">${renderIcon('siembra', { scale: 'xs' })} Esta temporada</div>
-        <p class="fotos-vacio">Este mes no hay siembras típicas para arrancar.</p>
-        <a href="#/calendario" class="link-ver-todas">Ver calendario →</a>
+        <div class="temporada-prompt">
+          <span>Configurá tu hemisferio para ver qué podés sembrar ahora.</span>
+          <a href="#/configuracion" class="link-small">Configurar</a>
+        </div>
       `;
     } else {
-      temporadaSection.innerHTML = `
-        <div class="section-title">${renderIcon('siembra', { scale: 'xs' })} Esta temporada</div>
-        <div class="temporada-list">
-          ${recomendaciones
-            .map(
-              (r) => `
-                <div class="temporada-item">
-                  <span class="temporada-especie">${escapeHtml(r.nombre)}</span>
-                  <span class="temporada-tipo">${r.tipo === 'almacigo' ? 'Almácigo' : 'Siembra directa'}</span>
-                </div>
-              `
-            )
-            .join('')}
-        </div>
-        <a href="#/calendario" class="link-ver-todas">Ver calendario →</a>
-      `;
+      const mesActual = new Date().getMonth() + 1;
+      const recomendaciones = obtenerRecomendacionesTemporada(config.hemisferio, mesActual);
+      if (!recomendaciones.length) {
+        temporadaSection.innerHTML = `
+          <div class="section-title">${renderIcon('siembra', { scale: 'xs' })} Esta temporada</div>
+          <p class="fotos-vacio">Este mes no hay siembras típicas para arrancar.</p>
+          <a href="#/calendario" class="link-ver-todas">Ver calendario →</a>
+        `;
+      } else {
+        temporadaSection.innerHTML = `
+          <div class="section-title">${renderIcon('siembra', { scale: 'xs' })} Esta temporada</div>
+          <div class="temporada-list">
+            ${recomendaciones
+              .map(
+                (r) => `
+                  <div class="temporada-item">
+                    <span class="temporada-especie">${escapeHtml(r.nombre)}</span>
+                    <span class="temporada-tipo">${r.tipo === 'almacigo' ? 'Almácigo' : 'Siembra directa'}</span>
+                  </div>
+                `
+              )
+              .join('')}
+          </div>
+          <a href="#/calendario" class="link-ver-todas">Ver calendario →</a>
+        `;
+      }
     }
   }
 
-  root.querySelector('#btn-obs-principal').addEventListener('click', () => {
+  root.querySelector('#btn-obs-principal')?.addEventListener('click', () => {
     openObservacionRapida(cultivos);
   });
 

@@ -1052,6 +1052,14 @@ function abrirSugerenciaRecordatorioStandalone(cultivoId, sugerencia, onDone) {
 // de armar el HTML — evita recalcularla (y potencialmente desempatar al
 // azar distinto) apenas se pinta la tarjeta por primera vez.
 function pintarSugerenciaObservacion(wrap, cultivo, eventos, config, onDone, sugerenciaInicial) {
+  // Motion: la tarjeta cruza (fade-out corto → cambia contenido → fade-in)
+  // en vez de reemplazar el texto de golpe cuando se pide "Otra
+  // sugerencia" — ver cambiarConTransicion más abajo y .sugerencia-crossfade
+  // en styles.css. Un guard simple evita que un doble toque encime dos
+  // transiciones a la vez.
+  wrap.classList.add('sugerencia-crossfade');
+  let transicionando = false;
+
   // excluirIds: ids a evitar en ESTE pedido puntual (se usa desde "Otra
   // sugerencia", para no repetir la que se acaba de mostrar). La memoria
   // entre visitas (cultivo.sugerenciasRecientes) la aplica el motor por su
@@ -1097,15 +1105,59 @@ function pintarSugerenciaObservacion(wrap, cultivo, eventos, config, onDone, sug
       // la exclusión de este pedido puntual.
       const excluirAhora = [sugerencia.idPregunta, ...excluirIds];
       const siguiente = obtenerSugerenciaCultivo(cultivo, eventos, new Date(), config.hemisferio, { excluirIds: excluirAhora });
-      pintarSugerencia(siguiente, excluirAhora);
+      cambiarConTransicion(siguiente, excluirAhora);
     });
     wrap.querySelector('#btn-ocultar-sugerencia').addEventListener('click', () => {
+      colapsarYOcultar();
+    });
+  }
+
+  // "Otra sugerencia": fade-out corto, recién ahí se cambia el contenido, y
+  // fade-in — nunca un reemplazo instantáneo del texto (pedido explícito de
+  // motion). --motion-fast en JS abajo tiene que coincidir con el valor
+  // real de --motion-fast en styles.css; no se lee de la variable CSS para
+  // no complicar esto con getComputedStyle por una constante que ya está
+  // documentada en un solo lugar más (el otro es el spec, no el código).
+  function cambiarConTransicion(sugerencia, excluirIds) {
+    if (transicionando) return;
+    transicionando = true;
+    wrap.style.opacity = '0';
+    setTimeout(() => {
+      pintarSugerencia(sugerencia, excluirIds);
+      requestAnimationFrame(() => { wrap.style.opacity = '1'; });
+      transicionando = false;
+    }, 120);
+  }
+
+  // "Ocultar": se contrae (opacity + max-height hacia 0) en vez de
+  // desaparecer de un salto. max-height explícito en vez de animar
+  // "height: auto" directamente (no es animable de forma confiable) —
+  // se fija la altura actual en px, se fuerza un reflow para que el
+  // navegador la registre, y recién ahí se anima a 0.
+  function colapsarYOcultar() {
+    if (transicionando) return;
+    transicionando = true;
+    const alturaActual = wrap.scrollHeight;
+    wrap.style.maxHeight = alturaActual + 'px';
+    wrap.style.overflow = 'hidden';
+    void wrap.offsetHeight; // forzar reflow: sin esto no hay "desde dónde" animar
+    wrap.classList.add('sugerencia-colapsando');
+    requestAnimationFrame(() => {
+      wrap.style.maxHeight = '0px';
+      wrap.style.opacity = '0';
+    });
+    setTimeout(() => {
       // Ocultar no trae una sugerencia distinta (eso es "Otra sugerencia"):
       // simplemente la retira. Como ya quedó agregada a
-      // cultivo.sugerenciasRecientes arriba, no va a reaparecer de
+      // cultivo.sugerenciasRecientes al mostrarse, no va a reaparecer de
       // inmediato la próxima vez que se entre a esta ficha.
       wrap.innerHTML = `<p class="sugerencia-oculta-nota">Listo, no te la muestro más por ahora.</p>`;
-    });
+      wrap.classList.remove('sugerencia-colapsando');
+      wrap.style.maxHeight = '';
+      wrap.style.overflow = '';
+      wrap.style.opacity = '1';
+      transicionando = false;
+    }, 190);
   }
 
   pintarSugerencia(sugerenciaInicial, []);

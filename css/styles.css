@@ -21,6 +21,20 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --dur: 0.22s;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* Sistema central de motion (pedido aparte, para microinteracciones) —
+     --dur/--ease de arriba NO se tocan: ya los usan ~15 animaciones de
+     entrada de cards (.cultivo-card, .especie-card, etc.) que ya se ven
+     bien, y tocarlos habría sido un rediseño encubierto de todo lo que ya
+     andaba. Estas variables nuevas son para lo que se construye de acá en
+     adelante (nav, sugerencias, y lo que se sume después): tres duraciones
+     con una única lógica (rápido = feedback táctil inmediato, base =
+     transiciones de contenido, lento = lo más notorio que se anima) y una
+     única curva suave, en vez de que cada regla nueva invente su propio
+     número. */
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 240ms;
+  --ease-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 * { box-sizing: border-box; }
@@ -251,6 +265,25 @@ a { color: inherit; text-decoration: none; }
    translateY(-2px) que tenía esta regla antes. */
 .nav-item .nav-icon { display: flex; }
 .nav-item.active { color: var(--verde); font-weight: 700; }
+/* El color del ícono (fill: currentColor, ver icons.js) y el del label
+   (heredado, .nav-label no tiene color propio) ya transicionan solos vía
+   la regla `.nav-item { transition: color ... }` de arriba — no hacía
+   falta agregar nada para esas dos partes del pedido de motion. Lo único
+   que faltaba era el "pulso" de escala, muy sutil, SOLO en el ícono que
+   pasa a estar activo (nunca en el que se desactiva, y nunca en
+   "Registrar": ver nota grande sobre .nav-item-cta más abajo — ese botón
+   mantiene su presencia actual sin tocar). Sin rebote: 1 → .96 → 1, una
+   sola vez, disparado porque updateNavActive() (app.js) recién agrega la
+   clase .active en ese momento — si se vuelve a tocar la pestaña ya activa
+   la clase no cambia, así que no se repite de pedo. */
+@keyframes navIconPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+.nav-item.active:not(.nav-item-cta) .nav-icon {
+  animation: navIconPulse var(--motion-base) var(--ease-soft);
+}
 
 .nav-item-cta .nav-icon {
   background: var(--verde);
@@ -355,10 +388,24 @@ section + section { margin-top: 20px; }
      depender de space-between. */
   gap: 6px;
 }
-.section-title .link-small {
+/* Base de .link-small SIN el contexto de .section-title: hasta ahora esta
+   clase solo tenía la regla scoped de abajo, así que usos fuera de
+   ".section-title" (el link "Configurar" del aviso de hemisferio, y ahora
+   el botón "Hacer respaldo" del aviso de respaldo — ambos dentro de
+   .temporada-prompt, no de .section-title) quedaban sin color/tamaño
+   propio, con el estilo por defecto del navegador. Se agrega acá, sin
+   tocar la regla scoped (sigue ganando por especificidad para el
+   margin-left:auto que necesita "Ver todos" al lado del título). De paso,
+   feedback táctil — pedido explícito de motion para "todo elemento tocable
+   importante". */
+.link-small {
   font-size: 13px;
   font-weight: 500;
   color: var(--verde);
+  transition: opacity var(--motion-fast) var(--ease-soft);
+}
+.link-small:active { opacity: 0.6; }
+.section-title .link-small {
   margin-left: auto;
 }
 
@@ -1422,6 +1469,19 @@ button.link-ver-todas:active { transform: scale(0.98); }
 .sugerencia-botones { display: flex; flex-direction: column; gap: 4px; }
 .sugerencia-botones .btn-primary { width: 100%; }
 .sugerencia-botones .link-ver-todas { text-align: center; }
+
+/* Motion de la sección Sugerencia (ver
+   views/detalle.js#pintarSugerenciaObservacion): "Otra sugerencia" nunca
+   reemplaza el texto de golpe (fade-out corto → cambia el contenido →
+   fade-in, todo manejado desde JS con esta única transición de opacity) y
+   "Ocultar" se retira con una contracción breve en vez de desaparecer de
+   un salto — con max-height explícito en vez de animar height:auto
+   directamente (que no es animable de forma confiable), fijado en JS
+   momentáneamente antes de llevarlo a 0. */
+.sugerencia-crossfade { transition: opacity var(--motion-fast) var(--ease-soft); }
+.sugerencia-colapsando {
+  transition: max-height var(--motion-base) var(--ease-soft), opacity var(--motion-base) var(--ease-soft);
+}
 
 /* "Otra sugerencia · Ocultar" — fila secundaria bajo el botón principal,
    ver views/detalle.js#pintarSugerenciaObservacion. */
