@@ -33,6 +33,7 @@
   <label class="menu-item" for="input-import">Importar respaldo</label>
   <input type="file" id="input-import" accept="application/json" hidden />
   <button id="btn-banco" class="menu-item"></button>
+  <button id="btn-personalizar-inicio" class="menu-item">Personalizar inicio</button>
   <button id="btn-configuracion" class="menu-item">Configuración</button>
 </div>
 
@@ -74,6 +75,7 @@
 <script src="js/data/biblioteca-especies.js"></script>
 <script src="js/motor-biblioteca.js"></script>
 <script src="js/motor-banco.js"></script>
+<script src="js/motor-home-layout.js"></script>
 <script src="js/motor-estacional.js"></script>
 <script src="js/data/preguntas-cultivos.js"></script>
 <script src="js/motor-observacion.js"></script>
@@ -162,6 +164,11 @@
   document.getElementById('btn-banco').addEventListener('click', () => {
     document.getElementById('menu-panel').classList.add('hidden');
     navigate('#/banco');
+  });
+
+  document.getElementById('btn-personalizar-inicio').addEventListener('click', () => {
+    document.getElementById('menu-panel').classList.add('hidden');
+    abrirPersonalizarInicio();
   });
 
   document.getElementById('btn-configuracion').addEventListener('click', () => {

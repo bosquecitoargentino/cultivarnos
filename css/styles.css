@@ -963,6 +963,40 @@ section + section { margin-top: 20px; }
 }
 .checkbox-row input { width: 20px; height: 20px; }
 
+/* ---------- Personalizar inicio ---------- */
+.home-layout-list { margin-top: 4px; }
+.home-layout-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+.home-layout-row + .home-layout-row { border-top: 1px solid var(--borde); }
+.home-layout-mover { display: flex; flex-direction: column; gap: 2px; }
+.home-layout-flecha {
+  width: 30px;
+  height: 26px;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--borde);
+  background: #fff;
+  color: var(--verde-oscuro);
+  font-size: 14px;
+  line-height: 1;
+  transition: transform var(--motion-fast) var(--ease-soft), background-color var(--motion-fast) var(--ease-soft), opacity var(--motion-fast) var(--ease-soft);
+}
+.home-layout-flecha:active { transform: scale(0.9); background: var(--verde-suave); }
+.home-layout-flecha:disabled { opacity: 0.3; }
+.home-layout-label {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 500;
+}
+.home-layout-restaurar {
+  display: block;
+  margin: 18px auto 0;
+  text-align: center;
+}
+
 /* ---------- Detalle ---------- */
 .detalle-hero {
   border-radius: var(--radio);

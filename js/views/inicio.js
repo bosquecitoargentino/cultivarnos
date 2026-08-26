@@ -46,6 +46,33 @@ async function renderInicio(root) {
       : `${base} · Todo al día`;
   }
 
+  // Los 5 bloques de contenido de Inicio (personalizables en orden y
+  // visibilidad desde "Personalizar inicio" — ver motor-home-layout.js) se
+  // resuelven ACÁ, ANTES de armar el HTML: así el orden final se puede
+  // aplicar leyendo obtenerHomeLayout() sin ningún await pendiente después,
+  // y de paso ninguna sección queda esperando un await con un `root` que
+  // mientras tanto pudo haber sido reemplazado por otra pantalla.
+  const cardsCultivosHtml = activos.length
+    ? (await Promise.all(activos.slice(0, 6).map((c) => renderCultivoCardHtml(c)))).join('')
+    : '';
+  const movimientos = await getUltimosMovimientos(5);
+
+  const bloquesHtml = {
+    recordatorios: htmlBloqueRecordatorios(recordatorios, cultivos),
+    cultivos: htmlBloqueCultivos(cultivos, activos, cardsCultivosHtml),
+    sugerencia: htmlBloqueSugerenciaDestacada(destacada),
+    movimientos: htmlBloqueMovimientos(movimientos),
+    temporada: htmlBloqueTemporada(config),
+  };
+
+  const bloquesOrdenados = obtenerHomeLayout()
+    .filter((b) => b.visible)
+    .map((b) => bloquesHtml[b.id] || '')
+    .join('');
+
+  // Header, "acciones rápidas" y el aviso de respaldo son estructurales —
+  // no forman parte de la personalización, siempre están (mismo criterio
+  // que el header/la navegación de toda la app).
   root.innerHTML = `
     <div class="view-header view-header-compacto">
       <h1>Hola</h1>
@@ -65,62 +92,17 @@ async function renderInicio(root) {
       </div>
     </section>` : ''}
 
-    <section id="recordatorios-section"></section>
-
-    <section>
-      <div class="section-title">
-        Tus cultivos
-        ${cultivos.length ? '<a href="#/cultivos" class="link-small">Ver todos</a>' : ''}
-      </div>
-      <div id="activos-list"></div>
-    </section>
-
-    ${destacada ? `
-    <section>
-      <div class="section-title">Sugerencia para hoy</div>
-      <div id="sugerencia-destacada"></div>
-    </section>` : ''}
-
-    <section>
-      <div class="section-title">Últimos movimientos</div>
-      <div id="movimientos-list"></div>
-    </section>
-
-    <section id="temporada-section"></section>
+    ${bloquesOrdenados}
   `;
 
-  // Recordatorios: sección completa solo si hay pendientes; si no, una
-  // línea chica para no empujar hacia abajo lo que importa.
-  const recSection = root.querySelector('#recordatorios-section');
-  if (!recordatorios.length) {
-    recSection.innerHTML = `<p class="recordatorios-vacio">Sin recordatorios para hoy</p>`;
-  } else {
-    recSection.innerHTML = `
-      <div class="section-title">Recordatorios</div>
-      <div id="recordatorios-list"></div>
-    `;
-    const recList = recSection.querySelector('#recordatorios-list');
-    const cultivoPorId = new Map(cultivos.map((c) => [c.id, c]));
+  // A partir de acá ya no hay ningún await: todo el contenido ya está en
+  // el DOM, así que estos querySelector solo pueden devolver null porque el
+  // bloque correspondiente está oculto por elección de la persona — no por
+  // una carrera con otra navegación (esa clase de bug ya no puede pasar acá
+  // desde que se resuelven los bloques antes de tocar el DOM).
 
-    recList.innerHTML = recordatorios
-      .slice(0, 6)
-      .map((r) => {
-        const cultivo = cultivoPorId.get(r.cultivoId);
-        const vencido = isVencido(r.fecha);
-        return `
-        <div class="reminder-item ${vencido ? 'vencido' : ''}" data-id="${r.id}">
-          <button class="reminder-check" data-action="completar" data-id="${r.id}" aria-label="Marcar como completado"></button>
-          <div class="reminder-info">
-            <div class="reminder-title">${escapeHtml(r.titulo)}</div>
-            <div class="reminder-sub">${cultivo ? escapeHtml(cultivo.especie) + ' · ' : ''}${vencido ? 'Venció el ' : ''}${formatFechaCorta(r.fecha)}</div>
-          </div>
-          <div class="reminder-actions">
-            <button class="pill-btn" data-action="posponer" data-id="${r.id}">+3d</button>
-          </div>
-        </div>`;
-      })
-      .join('');
-
+  const recList = root.querySelector('#recordatorios-list');
+  if (recList) {
     recList.addEventListener('click', async (e) => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
@@ -140,60 +122,123 @@ async function renderInicio(root) {
     });
   }
 
-  // Tus cultivos
-  const activosList = root.querySelector('#activos-list');
-  if (!activos.length) {
-    activosList.innerHTML = `<div class="empty-state">${renderIcon('cultivos', { scale: 'xl', className: 'icon-bloque' })}Todavía no registraste cultivos.</div>`;
-  } else {
-    const cards = await Promise.all(activos.slice(0, 6).map((c) => renderCultivoCardHtml(c)));
-    activosList.innerHTML = `<div class="cultivos-grid">${cards.join('')}</div>`;
-    activosList.querySelectorAll('.cultivo-card').forEach((card) => {
-      card.addEventListener('click', () => navigate(`#/cultivo/${card.dataset.id}`));
+  root.querySelectorAll('#activos-list .cultivo-card').forEach((card) => {
+    card.addEventListener('click', () => navigate(`#/cultivo/${card.dataset.id}`));
+  });
+
+  // "Ver cultivo" de la sugerencia destacada: no existe (ni se crea acá)
+  // ninguna pantalla nueva de "sugerencias" — abre directamente la ficha.
+  root.querySelector('#btn-ver-cultivo-destacado')?.addEventListener('click', (e) => {
+    navigate(`#/cultivo/${e.currentTarget.dataset.cultivoId}`);
+  });
+
+  // Un movimiento agrupado (riego múltiple, ver views/riego-multiple.js) no
+  // tiene una única ficha a la que llevar — abre "Mis cultivos", el destino
+  // existente más natural. Un movimiento individual abre la ficha del
+  // cultivo, como cualquier otro acceso a un cultivo en la app.
+  root.querySelectorAll('#movimientos-list .movimiento-item').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.batch) navigate('#/cultivos');
+      else navigate(`#/cultivo/${btn.dataset.cultivoId}`);
+    });
+  });
+
+  root.querySelector('#btn-obs-principal')?.addEventListener('click', () => {
+    openObservacionRapida(cultivos);
+  });
+
+  const btnRespaldo = root.querySelector('#btn-respaldo-inicio');
+  if (btnRespaldo) {
+    btnRespaldo.addEventListener('click', async () => {
+      btnRespaldo.disabled = true;
+      try {
+        await exportarRespaldo();
+        showToast('Respaldo exportado');
+        renderInicio(root);
+      } catch (err) {
+        console.error(err);
+        showToast('Error al exportar');
+        btnRespaldo.disabled = false;
+      }
     });
   }
+}
 
-  // Sugerencia para hoy: una sola tarjeta, sin acciones de "otra
-  // sugerencia"/"ocultar" (esas viven solo en la ficha del cultivo — ver
-  // detalle.js). "Ver cultivo" abre directamente esa ficha: no existe (ni
-  // se crea acá) ninguna pantalla nueva de "sugerencias".
-  // Guard con "if (destacadaWrap)": este punto ya pasó por un `await`
-  // (Tus cultivos), así que si la persona navegó a otra pantalla justo en
-  // ese instante, `root` puede ya no ser el de Inicio. No es un caso de
-  // motion — es un guard defensivo general, mismo criterio que ya usa
-  // detalle.js para #sugerencia-observacion — para no intentar escribir
-  // sobre un nodo que otra vista ya reemplazó.
-  if (destacada) {
-    const destacadaWrap = root.querySelector('#sugerencia-destacada');
-    if (destacadaWrap) {
-      destacadaWrap.innerHTML = `
+// ---------------------------------------------------------------------
+// Bloques de Inicio — cada función arma el HTML completo de un bloque
+// (incluida su propia <section>, título y estado vacío si corresponde) sin
+// tocar el DOM. renderInicio() los intercala según el orden/visibilidad
+// guardado en motor-home-layout.js. El contenido/comportamiento de cada
+// bloque es exactamente el mismo que tenían antes de esta funcionalidad —
+// esto es un reordenamiento del código existente, no un cambio de lógica.
+// ---------------------------------------------------------------------
+
+function htmlBloqueRecordatorios(recordatorios, cultivos) {
+  if (!recordatorios.length) {
+    return `<section><p class="recordatorios-vacio">Sin recordatorios para hoy</p></section>`;
+  }
+  const cultivoPorId = new Map(cultivos.map((c) => [c.id, c]));
+  const itemsHtml = recordatorios
+    .slice(0, 6)
+    .map((r) => {
+      const cultivo = cultivoPorId.get(r.cultivoId);
+      const vencido = isVencido(r.fecha);
+      return `
+      <div class="reminder-item ${vencido ? 'vencido' : ''}" data-id="${r.id}">
+        <button class="reminder-check" data-action="completar" data-id="${r.id}" aria-label="Marcar como completado"></button>
+        <div class="reminder-info">
+          <div class="reminder-title">${escapeHtml(r.titulo)}</div>
+          <div class="reminder-sub">${cultivo ? escapeHtml(cultivo.especie) + ' · ' : ''}${vencido ? 'Venció el ' : ''}${formatFechaCorta(r.fecha)}</div>
+        </div>
+        <div class="reminder-actions">
+          <button class="pill-btn" data-action="posponer" data-id="${r.id}">+3d</button>
+        </div>
+      </div>`;
+    })
+    .join('');
+  return `
+    <section>
+      <div class="section-title">Recordatorios</div>
+      <div id="recordatorios-list">${itemsHtml}</div>
+    </section>
+  `;
+}
+
+function htmlBloqueCultivos(cultivos, activos, cardsHtml) {
+  const contenido = activos.length
+    ? `<div class="cultivos-grid">${cardsHtml}</div>`
+    : `<div class="empty-state">${renderIcon('cultivos', { scale: 'xl', className: 'icon-bloque' })}Todavía no registraste cultivos.</div>`;
+  return `
+    <section>
+      <div class="section-title">
+        Tus cultivos
+        ${cultivos.length ? '<a href="#/cultivos" class="link-small">Ver todos</a>' : ''}
+      </div>
+      <div id="activos-list">${contenido}</div>
+    </section>
+  `;
+}
+
+function htmlBloqueSugerenciaDestacada(destacada) {
+  if (!destacada) return '';
+  return `
+    <section>
+      <div class="section-title">Sugerencia para hoy</div>
+      <div id="sugerencia-destacada">
         <div class="sugerencia-card sugerencia-destacada">
           <div class="sugerencia-destacada-cultivo">${escapeHtml(destacada.cultivoNombre)}</div>
           <div class="sugerencia-pregunta">${escapeHtml(destacada.pregunta)}</div>
-          <button type="button" id="btn-ver-cultivo-destacado" class="btn-secondary">Ver cultivo</button>
+          <button type="button" id="btn-ver-cultivo-destacado" class="btn-secondary" data-cultivo-id="${destacada.cultivoId}">Ver cultivo</button>
         </div>
-      `;
-      destacadaWrap.querySelector('#btn-ver-cultivo-destacado').addEventListener('click', () => {
-        navigate(`#/cultivo/${destacada.cultivoId}`);
-      });
-    }
-  }
+      </div>
+    </section>
+  `;
+}
 
-  // Últimos movimientos: memoria reciente de la huerta, no un historial
-  // completo (para eso ya existe el historial por cultivo). Toda la
-  // lógica de orden/agrupamiento vive en getUltimosMovimientos()
-  // (motor-movimientos.js) — acá solo se pinta lo que esa función ya
-  // devuelve resuelto.
-  const movimientosList = root.querySelector('#movimientos-list');
-  const movimientos = await getUltimosMovimientos(5);
-  // Guard "if (movimientosList)": ya pasamos por dos await (Tus cultivos +
-  // este mismo) — si la persona navegó a otra pantalla en el medio, `root`
-  // puede ya no ser el de Inicio. No es un caso de motion, es defensivo
-  // (mismo criterio que el guard de la sugerencia destacada, arriba).
-  if (movimientosList) {
-    if (!movimientos.length) {
-      movimientosList.innerHTML = `<p class="movimientos-vacio">Todavía no hay movimientos registrados.</p>`;
-    } else {
-      movimientosList.innerHTML = movimientos
+function htmlBloqueMovimientos(movimientos) {
+  const contenido = !movimientos.length
+    ? `<p class="movimientos-vacio">Todavía no hay movimientos registrados.</p>`
+    : movimientos
         .map((m) => {
           const icono = eventoIcon(m.tipo);
           if (m.batch) {
@@ -218,83 +263,152 @@ async function renderInicio(root) {
           `;
         })
         .join('');
+  return `
+    <section>
+      <div class="section-title">Últimos movimientos</div>
+      <div id="movimientos-list">${contenido}</div>
+    </section>
+  `;
+}
 
-      // Un movimiento agrupado (riego múltiple, ver views/riego-multiple.js)
-      // no tiene una única ficha a la que llevar — abre "Mis cultivos", el
-      // destino existente más natural (punto explícito del pedido: no crear
-      // una pantalla nueva solo para esto). Un movimiento individual abre la
-      // ficha del cultivo, como cualquier otro acceso a un cultivo en la app.
-      movimientosList.querySelectorAll('.movimiento-item').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          if (btn.dataset.batch) navigate('#/cultivos');
-          else navigate(`#/cultivo/${btn.dataset.cultivoId}`);
-        });
-      });
-    }
-  }
-
-  // Esta temporada: motor local, sin IA — solo lo que la biblioteca de
-  // especies puede resolver de forma predecible según hemisferio y mes.
-  // Mismo guard defensivo que arriba.
-  const temporadaSection = root.querySelector('#temporada-section');
-  if (temporadaSection) {
-    if (!config.hemisferio) {
-      temporadaSection.innerHTML = `
+function htmlBloqueTemporada(config) {
+  if (!config.hemisferio) {
+    return `
+      <section>
         <div class="section-title">${renderIcon('siembra', { scale: 'xs' })} Esta temporada</div>
         <div class="temporada-prompt">
           <span>Configurá tu hemisferio para ver qué podés sembrar ahora.</span>
           <a href="#/configuracion" class="link-small">Configurar</a>
         </div>
-      `;
-    } else {
-      const mesActual = new Date().getMonth() + 1;
-      const recomendaciones = obtenerRecomendacionesTemporada(config.hemisferio, mesActual);
-      if (!recomendaciones.length) {
-        temporadaSection.innerHTML = `
-          <div class="section-title">${renderIcon('siembra', { scale: 'xs' })} Esta temporada</div>
-          <p class="fotos-vacio">Este mes no hay siembras típicas para arrancar.</p>
-          <a href="#/calendario" class="link-ver-todas">Ver calendario →</a>
-        `;
-      } else {
-        temporadaSection.innerHTML = `
-          <div class="section-title">${renderIcon('siembra', { scale: 'xs' })} Esta temporada</div>
-          <div class="temporada-list">
-            ${recomendaciones
-              .map(
-                (r) => `
-                  <div class="temporada-item">
-                    <span class="temporada-especie">${escapeHtml(r.nombre)}</span>
-                    <span class="temporada-tipo">${r.tipo === 'almacigo' ? 'Almácigo' : 'Siembra directa'}</span>
-                  </div>
-                `
-              )
-              .join('')}
+      </section>
+    `;
+  }
+  const mesActual = new Date().getMonth() + 1;
+  const recomendaciones = obtenerRecomendacionesTemporada(config.hemisferio, mesActual);
+  if (!recomendaciones.length) {
+    return `
+      <section>
+        <div class="section-title">${renderIcon('siembra', { scale: 'xs' })} Esta temporada</div>
+        <p class="fotos-vacio">Este mes no hay siembras típicas para arrancar.</p>
+        <a href="#/calendario" class="link-ver-todas">Ver calendario →</a>
+      </section>
+    `;
+  }
+  return `
+    <section>
+      <div class="section-title">${renderIcon('siembra', { scale: 'xs' })} Esta temporada</div>
+      <div class="temporada-list">
+        ${recomendaciones
+          .map(
+            (r) => `
+              <div class="temporada-item">
+                <span class="temporada-especie">${escapeHtml(r.nombre)}</span>
+                <span class="temporada-tipo">${r.tipo === 'almacigo' ? 'Almácigo' : 'Siembra directa'}</span>
+              </div>
+            `
+          )
+          .join('')}
+      </div>
+      <a href="#/calendario" class="link-ver-todas">Ver calendario →</a>
+    </section>
+  `;
+}
+
+// ---------------------------------------------------------------------
+// "Personalizar inicio": reordenar (↑/↓) y mostrar/ocultar los bloques de
+// arriba. Nunca borra datos — solo cambia qué se ve primero en Inicio y en
+// qué orden (ver motor-home-layout.js). Cada cambio se guarda al toque y
+// se refleja de inmediato si la persona vuelve a Inicio; no hace falta un
+// botón "Guardar" porque cada acción ya es, en sí misma, el cambio
+// completo (mover uno o togglear uno), así que persistir al instante es
+// tan simple como esperar a un guardado explícito, pero con menos pasos.
+// ---------------------------------------------------------------------
+
+function abrirPersonalizarInicio() {
+  function pintarFilas() {
+    const layout = obtenerHomeLayout();
+    return layout
+      .map((b, i) => {
+        const primero = i === 0;
+        const ultimo = i === layout.length - 1;
+        return `
+          <div class="home-layout-row" data-id="${b.id}">
+            <div class="home-layout-mover">
+              <button type="button" class="home-layout-flecha" data-move="up" data-id="${b.id}" ${primero ? 'disabled' : ''} aria-label="Subir">↑</button>
+              <button type="button" class="home-layout-flecha" data-move="down" data-id="${b.id}" ${ultimo ? 'disabled' : ''} aria-label="Bajar">↓</button>
+            </div>
+            <label class="home-layout-label checkbox-row">
+              <input type="checkbox" class="home-layout-check" data-id="${b.id}" ${b.visible ? 'checked' : ''} />
+              ${escapeHtml(etiquetaBloqueHome(b.id))}
+            </label>
           </div>
-          <a href="#/calendario" class="link-ver-todas">Ver calendario →</a>
         `;
-      }
-    }
+      })
+      .join('');
   }
 
-  root.querySelector('#btn-obs-principal')?.addEventListener('click', () => {
-    openObservacionRapida(cultivos);
+  const { backdrop, close } = createModal(`
+    <div class="modal-sheet">
+      <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
+      <h2>Personalizar inicio</h2>
+      <div class="home-layout-list" id="home-layout-list">${pintarFilas()}</div>
+      <button type="button" id="btn-restaurar-home" class="link-small home-layout-restaurar">Restaurar inicio predeterminado</button>
+    </div>
+  `);
+
+  const sheet = backdrop.querySelector('.modal-sheet');
+
+  // El cambio se guarda al toque (guardarHomeLayout/restaurarHomeLayoutPorDefecto
+  // dentro de cada handler de abajo), pero volver a pintar Inicio recién
+  // cuando el modal se cierra — no en cada toque de ↑/↓/checkbox mientras
+  // sigue abierto. Inicio queda tapado por el modal de todos modos, así que
+  // no hay necesidad de re-renderizarlo de fondo en cada micro-cambio; y
+  // evitarlo también evita re-computar la sugerencia destacada más seguido
+  // de lo necesario (ver motor-observacion.js#getSugerenciaDestacada, que
+  // no se toca acá). El requisito de "se aplica de inmediato al volver a
+  // Inicio" queda cubierto porque cerrar el modal siempre pasa por acá.
+  function cerrarYActualizar() {
+    close();
+    router();
+  }
+  sheet.querySelector('#modal-close').addEventListener('click', cerrarYActualizar);
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) router();
   });
 
-  const btnRespaldo = root.querySelector('#btn-respaldo-inicio');
-  if (btnRespaldo) {
-    btnRespaldo.addEventListener('click', async () => {
-      btnRespaldo.disabled = true;
-      try {
-        await exportarRespaldo();
-        showToast('Respaldo exportado');
-        renderInicio(root);
-      } catch (err) {
-        console.error(err);
-        showToast('Error al exportar');
-        btnRespaldo.disabled = false;
-      }
-    });
+  function refrescarLista() {
+    sheet.querySelector('#home-layout-list').innerHTML = pintarFilas();
   }
+
+  sheet.querySelector('#home-layout-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-move]');
+    if (!btn || btn.disabled) return;
+    const layout = obtenerHomeLayout();
+    const idx = layout.findIndex((b) => b.id === btn.dataset.id);
+    if (idx === -1) return;
+    const destino = btn.dataset.move === 'up' ? idx - 1 : idx + 1;
+    if (destino < 0 || destino >= layout.length) return;
+    [layout[idx], layout[destino]] = [layout[destino], layout[idx]];
+    guardarHomeLayout(layout);
+    refrescarLista();
+  });
+
+  sheet.querySelector('#home-layout-list').addEventListener('change', (e) => {
+    const check = e.target.closest('.home-layout-check');
+    if (!check) return;
+    const layout = obtenerHomeLayout();
+    const entrada = layout.find((b) => b.id === check.dataset.id);
+    if (!entrada) return;
+    entrada.visible = check.checked;
+    guardarHomeLayout(layout);
+    refrescarLista();
+  });
+
+  sheet.querySelector('#btn-restaurar-home').addEventListener('click', () => {
+    if (!window.confirm('¿Restaurar el Inicio original?')) return;
+    restaurarHomeLayoutPorDefecto();
+    refrescarLista();
+  });
 }
 
 // ---------------------------------------------------------------------
