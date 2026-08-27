@@ -90,17 +90,47 @@ async function renderCultivos(root) {
 }
 
 // ---------------------------------------------------------------------
-// Mantener presionado + arrastrar para reordenar (Mis cultivos). Mismo
-// enfoque de Pointer Events que "Personalizar inicio" (ver
-// habilitarArrastreHomeLayout en inicio.js), pero acá NO hay un handle
-// separado: toda la tarjeta sirve tanto para abrir la ficha (toque normal)
-// como para reordenar (mantener presionado ~900ms). Antes de cumplirse
-// ese tiempo, cualquier movimiento se interpreta como scroll normal — no
-// como el comienzo de un arrastre — así nunca compite con desplazarse por
-// la lista.
+// Mantener presionado + arrastrar para reordenar (Mis cultivos). Un único
+// flujo de Pointer Events (pointerdown/pointermove/pointerup/
+// pointercancel) — no se mezcla con touchstart/touchmove, mouse events
+// por separado, ni con HTML5 Drag & Drop. Toda la tarjeta sirve tanto
+// para abrir la ficha (toque normal) como para reordenar (mantener
+// presionado ~900ms). Antes de cumplirse ese tiempo, cualquier
+// movimiento se interpreta como el inicio de scroll — no como un
+// arrastre — así nunca compite con desplazarse por la lista.
+//
+// Nota importante sobre touch-action (causa confirmada de que el drag se
+// cortara solo en iPhone real): en iOS/Safari, el valor de touch-action
+// que rige un toque queda fijado desde el pointerdown/touchstart — un
+// cambio hecho por JS a mitad de gesto (por ejemplo, recién al activarse
+// el arrastre) NO se aplica de forma confiable a ese mismo toque. Es una
+// limitación reconocida del propio estándar (ver
+// https://github.com/w3c/pointerevents/issues/178: "touch-action cannot
+// be modified after pointerdown but before sufficient movement triggers
+// scrolling"). Con "touch-action: pan-y" fijo desde el principio, el
+// primer movimiento real después de activar el arrastre podía ser
+// reclamado por el scroll nativo del navegador ANTES de que nuestro
+// preventDefault() llegara a correr — eso es lo que se veía como "la
+// tarjeta se levanta pero al mover el dedo no acompaña y se suelta casi
+// enseguida": el navegador tomaba el gesto como scroll y mandaba
+// pointercancel.
+//
+// Por eso acá .cultivo-card usa "touch-action: none" FIJO desde siempre
+// (ver css/styles.css), y el scroll de antes de activar el arrastre lo
+// manejamos nosotros a mano (más abajo, "modo scroll manual") en vez de
+// depender de que el navegador lo haga. Así no hay ninguna mutación de
+// touch-action a mitad de gesto de la que depender.
 // ---------------------------------------------------------------------
 
 function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
+  // Temporal — ver validación en iPhone real. Deja un rastro corto en la
+  // consola de cada paso del gesto (pointerdown, activación del hold,
+  // setPointerCapture, modo scroll manual, pointerup, pointercancel) para
+  // confirmar en qué punto se corta si algo todavía falla. Sacar una vez
+  // confirmado que el arrastre funciona bien en el dispositivo real.
+  const DEBUG_DRAG = true;
+  const log = (...args) => { if (DEBUG_DRAG) console.log('[arrastre-cultivos]', ...args); };
+
   const UMBRAL_MOVIMIENTO = 10; // px — cualquier movimiento antes del hold es scroll, no drag
   const DEMORA_HOLD = 900; // ms — "mantener presionado ~1 segundo"
   const MARGEN_ARRIBA = 70; // px, despeja el header fijo
@@ -109,6 +139,16 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
   const VELOCIDAD_AUTOSCROLL = 12; // px por frame, cerca del borde
 
   let drag = null;
+
+  // Capas extra, acotadas solo a las tarjetas (nunca globales), contra el
+  // menú/selección nativo de iOS durante el mantener presionado — además
+  // de la clase cultivo-card-sujetando (ver más abajo).
+  grid.addEventListener('contextmenu', (e) => {
+    if (e.target.closest('.cultivo-card')) e.preventDefault();
+  });
+  grid.addEventListener('dragstart', (e) => {
+    if (e.target.closest('.cultivo-card')) e.preventDefault();
+  });
 
   grid.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -126,7 +166,16 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
     const yInicial = eInicial.clientY;
     let activado = false;
     let cancelado = false;
+    // "Modo scroll manual": como .cultivo-card tiene touch-action: none
+    // fijo (ver comentario arriba), el navegador nunca va a scrollear por
+    // su cuenta cuando el toque empieza sobre una tarjeta — así que si el
+    // movimiento antes del hold indica que la persona quiere scrollear,
+    // lo hacemos nosotros mismos con window.scrollBy, tomando la
+    // diferencia entre cada muestra de Y.
+    let modoScrollManual = false;
+    let ultimoYScroll = yInicial;
 
+    log('pointerdown', { pointerId, pointerType: eInicial.pointerType });
     // Se agrega ni bien empieza el toque, no recién al activar el arrastre
     // — así, si el hold se cumple, iOS ya no tiene ventana de tiempo para
     // haber arrancado su propia selección de texto. Se saca en TODOS los
@@ -141,19 +190,25 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
     function activar() {
       if (activado || cancelado) return;
       activado = true;
+      log('longpress activated');
       // Red de seguridad, no el mecanismo principal: si iOS ya alcanzó a
       // marcar una selección antes de que se cumpliera el hold, se limpia
       // acá. La prevención real es la clase de arriba + setPointerCapture.
       try { window.getSelection()?.removeAllRanges(); } catch (err) { /* no-op */ }
       if (card.setPointerCapture) {
-        try { card.setPointerCapture(pointerId); } catch (err) { /* no-op */ }
+        try {
+          card.setPointerCapture(pointerId);
+          log('setPointerCapture ok');
+        } catch (err) {
+          log('setPointerCapture error', err && err.message);
+        }
       }
       // Haptic opcional — no todos los navegadores lo tienen (iOS Safari
       // no), y no hace falta: si no existe, esto simplemente no hace nada.
       if (navigator.vibrate) {
         try { navigator.vibrate(10); } catch (err) { /* no-op */ }
       }
-      comenzarArrastre(card, xInicial, yInicial);
+      comenzarArrastre(card, xInicial, yInicial, pointerId);
     }
 
     function onMove(e) {
@@ -164,30 +219,43 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
           drag.ultimoClientY = e.clientY;
         }
         // Ya estamos arrastrando: no dejar que el navegador interprete
-        // este mismo gesto como scroll o selección.
+        // este mismo gesto como scroll o selección. Con touch-action:
+        // none puesto desde siempre esto ya no debería hacer falta para
+        // evitar el scroll nativo, pero se deja como red de seguridad.
+        e.preventDefault();
+        return;
+      }
+      if (modoScrollManual) {
+        window.scrollBy(0, ultimoYScroll - e.clientY);
+        ultimoYScroll = e.clientY;
         e.preventDefault();
         return;
       }
       const dx = e.clientX - xInicial;
       const dy = e.clientY - yInicial;
       if (Math.abs(dx) > UMBRAL_MOVIMIENTO || Math.abs(dy) > UMBRAL_MOVIMIENTO) {
-        // Antes de cumplirse el hold, cualquier movimiento es scroll (o un
-        // gesto que no nos interesa) — se cancela y se deja que el
-        // navegador siga con su comportamiento normal.
+        // Antes de cumplirse el hold, cualquier movimiento es scroll, no
+        // el comienzo de un arrastre: se cancela el hold y, a partir de
+        // acá, el scroll de la página lo manejamos nosotros a mano (ver
+        // "modo scroll manual" arriba) — el navegador no lo va a hacer
+        // solo porque la tarjeta tiene touch-action: none.
+        log('cancelado por movimiento -> modo scroll manual');
         cancelado = true;
         clearTimeout(timer);
         card.classList.remove('cultivo-card-sujetando');
-        quitarListeners();
+        modoScrollManual = true;
+        ultimoYScroll = e.clientY;
       }
     }
 
     function onUp(e) {
       if (e.pointerId !== pointerId) return;
+      log('pointerup', { activado, cancelado, modoScrollManual });
       clearTimeout(timer);
       quitarListeners();
       if (activado) {
         finalizarArrastre();
-      } else {
+      } else if (!modoScrollManual) {
         card.classList.remove('cultivo-card-sujetando');
         if (!cancelado) {
           // Toque normal (sin mantener, sin moverse): abre la ficha, como
@@ -199,8 +267,11 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
 
     function onCancel(e) {
       if (e.pointerId !== pointerId) return;
+      log('pointercancel', { activado, cancelado, modoScrollManual });
       clearTimeout(timer);
       quitarListeners();
+      // Limpiar el estado sin romper la lista, sea cual sea el momento en
+      // que Safari haya disparado el cancel.
       if (activado) finalizarArrastre();
       else card.classList.remove('cultivo-card-sujetando');
     }
@@ -216,7 +287,7 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
     document.addEventListener('pointercancel', onCancel);
   }
 
-  function comenzarArrastre(card, clientX, clientY) {
+  function comenzarArrastre(card, clientX, clientY, pointerId) {
     const rect = card.getBoundingClientRect();
 
     const placeholder = document.createElement('div');
@@ -225,10 +296,6 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
     card.parentNode.insertBefore(placeholder, card);
 
     card.classList.add('cultivo-card-arrastrando');
-    // touch-action se desactiva recién ACÁ, solo mientras dura el arrastre
-    // — antes de este punto la tarjeta conserva "pan-y" (scroll vertical
-    // normal). Se restaura en finalizarArrastre.
-    card.style.touchAction = 'none';
     card.style.position = 'fixed';
     card.style.left = rect.left + 'px';
     card.style.top = rect.top + 'px';
@@ -240,6 +307,7 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
     drag = {
       card,
       placeholder,
+      pointerId,
       rectLeft: rect.left,
       rectTop: rect.top,
       ancho: rect.width,
@@ -357,7 +425,14 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
   function finalizarArrastre() {
     if (!drag) return;
     cancelAnimationFrame(drag.rafId);
-    const { card, placeholder } = drag;
+    const { card, placeholder, pointerId } = drag;
+    if (card.releasePointerCapture && pointerId != null) {
+      try {
+        if (!card.hasPointerCapture || card.hasPointerCapture(pointerId)) {
+          card.releasePointerCapture(pointerId);
+        }
+      } catch (err) { /* no-op — puede que ya se haya liberado solo (pointercancel) */ }
+    }
     grid.insertBefore(card, placeholder);
     placeholder.remove();
     card.style.position = '';
@@ -367,7 +442,6 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
     card.style.height = '';
     card.style.margin = '';
     card.style.transform = '';
-    card.style.touchAction = '';
     card.classList.remove('cultivo-card-arrastrando');
     card.classList.remove('cultivo-card-sujetando');
 

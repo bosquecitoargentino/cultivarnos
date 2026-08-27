@@ -726,13 +726,16 @@ section + section { margin-top: 20px; }
   animation: fadeInUp var(--dur) var(--ease) backwards;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
   cursor: pointer;
-  /* touch-action: pan-y deja el scroll vertical nativo intacto en reposo —
-     recién se cambia a "none" por JS, y solo mientras dura un arrastre
-     confirmado (ver comenzarArrastre en cultivos.js). No hay
-     user-select/touch-callout acá: aplicarlos siempre desactivaría la
-     selección de texto de la tarjeta todo el tiempo, no solo durante el
-     gesto. Eso vive en .cultivo-card-sujetando, de abajo. */
-  touch-action: pan-y;
+  /* touch-action: none FIJO (no se cambia por JS a mitad de gesto — en
+     iOS/Safari ese cambio no se respeta de forma confiable una vez que el
+     toque ya empezó, ver comentario en habilitarArrastreCultivos en
+     cultivos.js). Como el navegador ya no scrollea por su cuenta al tocar
+     una tarjeta, el scroll de antes de activar el arrastre lo hace ese
+     mismo JS a mano ("modo scroll manual"). No hay user-select/
+     touch-callout acá: aplicarlos siempre desactivaría la selección de
+     texto de la tarjeta todo el tiempo, no solo durante el gesto. Eso
+     vive en .cultivo-card-sujetando, de abajo. */
+  touch-action: none;
 }
 .cultivo-card:active {
   transform: scale(0.97);
