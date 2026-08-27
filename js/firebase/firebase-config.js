@@ -35,12 +35,16 @@
 // ---------------------------------------------------------------------
 
 const FIREBASE_CONFIG = {
-  apiKey: 'TU_API_KEY_ACA',
-  authDomain: 'TU_PROYECTO.firebaseapp.com',
-  projectId: 'TU_PROYECTO',
-  storageBucket: 'TU_PROYECTO.appspot.com',
-  messagingSenderId: 'TU_SENDER_ID',
-  appId: 'TU_APP_ID',
+  apiKey: 'AIzaSyCxGhrf-ZLt1jR8pita2tBG1FIqcWgy-KI',
+  authDomain: 'cultivarnos-8331b.firebaseapp.com',
+  projectId: 'cultivarnos-8331b',
+  storageBucket: 'cultivarnos-8331b.firebasestorage.app',
+  messagingSenderId: '841085924387',
+  appId: '1:841085924387:web:5ec340e123e587c42d2d96',
+  // measurementId (Google Analytics) a propósito NO se incluye acá: esta
+  // integración decidió no agregar analítica (ver "Qué NO se hace ahora"
+  // en docs/firebase-architecture.md) — no se importa el SDK de Analytics
+  // en ningún lado, así que este campo no tendría efecto aunque estuviera.
 };
 
 // Versión fija del SDK (no "latest") — para que un cambio de versión del
