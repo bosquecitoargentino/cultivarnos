@@ -726,10 +726,43 @@ section + section { margin-top: 20px; }
   animation: fadeInUp var(--dur) var(--ease) backwards;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
   cursor: pointer;
+  /* Mantener presionado para reordenar (ver habilitarArrastreCultivos en
+     cultivos.js) reutiliza el mismo toque que abre la ficha — sin esto,
+     iOS muestra su propio menú de selección/callout durante el hold,
+     compitiendo visualmente con el gesto. touch-action: pan-y deja el
+     scroll vertical nativo intacto antes de que el arrastre se active. */
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 .cultivo-card:active {
   transform: scale(0.97);
   box-shadow: 0 1px 4px rgba(47, 79, 52, 0.1);
+}
+/* La tarjeta mientras se arrastra: elevación discreta, nada exagerado.
+   Especificidad más alta a propósito, para ganarle a ".cultivo-card:active"
+   de arriba (el dedo sigue "presionando" mientras se arrastra). */
+.cultivo-card-arrastrando,
+.cultivo-card.cultivo-card-arrastrando:active {
+  z-index: 40;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+  transform: scale(1.01);
+  opacity: 0.97;
+}
+.cultivo-card-placeholder {
+  border-radius: var(--radio);
+  background: var(--verde-suave);
+}
+.cultivos-ayuda-orden {
+  font-size: 12px;
+  color: var(--texto-suave);
+  text-align: center;
+  margin: -4px 0 12px;
+}
+.orden-cultivo-estado {
+  font-size: 11px;
+  color: var(--texto-suave);
+  font-weight: 400;
 }
 .cultivos-grid .cultivo-card:nth-child(1) { animation-delay: 0.02s; }
 .cultivos-grid .cultivo-card:nth-child(2) { animation-delay: 0.06s; }
