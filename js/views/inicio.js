@@ -343,7 +343,7 @@ function abrirPersonalizarInicio() {
                 <button type="button" class="home-layout-flecha" data-move="up" data-id="${b.id}" ${primero ? 'disabled' : ''} aria-label="Subir ${etiqueta}">↑</button>
                 <button type="button" class="home-layout-flecha" data-move="down" data-id="${b.id}" ${ultimo ? 'disabled' : ''} aria-label="Bajar ${etiqueta}">↓</button>
               </div>
-              <button type="button" class="home-layout-handle" aria-hidden="true" tabindex="-1">≡</button>
+              ${handleArrastreHtml()}
             </div>
           </div>
         `;

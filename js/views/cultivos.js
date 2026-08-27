@@ -123,7 +123,7 @@ async function abrirOrdenCultivos() {
                 <button type="button" class="home-layout-flecha" data-move="up" data-id="${c.id}" ${i === 0 ? 'disabled' : ''} aria-label="Subir ${etiqueta}">↑</button>
                 <button type="button" class="home-layout-flecha" data-move="down" data-id="${c.id}" ${i === ordenados.length - 1 ? 'disabled' : ''} aria-label="Bajar ${etiqueta}">↓</button>
               </div>
-              <button type="button" class="home-layout-handle" aria-hidden="true" tabindex="-1">≡</button>
+              ${handleArrastreHtml()}
             </div>
           </div>
         `;

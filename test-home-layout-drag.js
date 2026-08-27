@@ -157,6 +157,28 @@ async function centroDe(locator) {
   check('ninguna fila quedó con position inline residual', posicionesResiduales.every((p) => p === ''));
   await cerrarModal(page);
 
+  console.log('\n== 9) iPhone: Personalizar inicio comparte la misma protección contra selección de texto ==');
+  await abrirModal(page);
+  const handleEsSvgHome = await page.evaluate(() => {
+    const handle = document.querySelector('.home-layout-handle');
+    if (!handle) return false;
+    const soloTextoVacio = Array.from(handle.childNodes)
+      .filter((n) => n.nodeType === Node.TEXT_NODE)
+      .every((n) => !n.textContent.trim());
+    return soloTextoVacio && !!handle.querySelector('svg');
+  });
+  check('el handle es un ícono SVG, no el carácter de texto "≡"', handleEsSvgHome);
+  const seleccionSuprimidaHome = await page.evaluate(() => {
+    // Chromium no expone -webkit-touch-callout en getComputedStyle (es
+    // exclusivo de iOS Safari), así que acá solo se puede verificar
+    // user-select — el callout queda para la validación manual en iPhone.
+    const lista = document.querySelector('.home-layout-list');
+    const handle = lista.querySelector('.home-layout-handle');
+    return getComputedStyle(lista).userSelect === 'none' && getComputedStyle(handle).userSelect === 'none';
+  });
+  check('la lista y el handle de Personalizar inicio también tienen user-select desactivado (mismo CSS compartido)', seleccionSuprimidaHome);
+  await cerrarModal(page);
+
   console.log('\n== Errores de consola ==');
   console.log(consoleErrors.length ? consoleErrors.join('\n') : '(ninguno)');
   check('cero errores de consola en toda la corrida', consoleErrors.length === 0);

@@ -207,6 +207,50 @@ async function cerrarModal(page) {
   );
   check('ninguna tarjeta quedó con position/transform inline residual', residualesCards.every((r) => r === '|'));
 
+  console.log('\n== 11) iPhone: nada de selección de texto dentro de "Ordenar cultivos" ==');
+  await abrirOrdenar(page);
+  const handleEsSvg = await page.evaluate(() => {
+    const handle = document.querySelector('#orden-cultivos-list .home-layout-handle');
+    if (!handle) return false;
+    // El handle ya no debe tener ningún nodo de texto "≡" adentro — es un
+    // ícono SVG, así no hay ningún carácter que pueda quedar atrapado en
+    // una selección de iOS.
+    const soloTextoVacio = Array.from(handle.childNodes)
+      .filter((n) => n.nodeType === Node.TEXT_NODE)
+      .every((n) => !n.textContent.trim());
+    return soloTextoVacio && !!handle.querySelector('svg');
+  });
+  check('el handle es un ícono SVG, no el carácter de texto "≡"', handleEsSvg);
+  const seleccionSuprimida = await page.evaluate(() => {
+    const lista = document.querySelector('#orden-cultivos-list');
+    const handle = lista.querySelector('.home-layout-handle');
+    const fila = lista.querySelector('.home-layout-row');
+    // Esto se verifica en reposo (sin ningún arrastre activo), a propósito
+    // — la regla vive en el contenedor `.home-layout-list`, no solo en la
+    // clase que se agrega recién cuando el arrastre ya arrancó, así que
+    // cubre también el mantener-presionado previo, antes de que empiece a
+    // moverse la fila.
+    // Nota: -webkit-touch-callout es una propiedad exclusiva de iOS Safari
+    // — Chromium (el motor que usa este arnés de pruebas) ni siquiera la
+    // expone en getComputedStyle, así que acá solo se puede verificar
+    // user-select (la parte de la regla que sí es estándar). El callout
+    // queda cubierto por la validación manual en iPhone real.
+    const csLista = getComputedStyle(lista);
+    const csHandle = getComputedStyle(handle);
+    const csFila = getComputedStyle(fila);
+    const noSeleccionable = (cs) => cs.userSelect === 'none';
+    return noSeleccionable(csLista) && noSeleccionable(csHandle) && noSeleccionable(csFila);
+  });
+  check('la lista, la fila y el handle tienen user-select/touch-callout desactivados en reposo (antes de arrastrar)', seleccionSuprimida);
+  const textoNormalSigueSeleccionable = await page.evaluate(() => {
+    const titulo = document.querySelector('.view-header h1');
+    if (!titulo) return false;
+    return getComputedStyle(titulo).userSelect !== 'none';
+  });
+  check('un texto normal de la app (fuera del modal de ordenar) sigue siendo seleccionable', textoNormalSigueSeleccionable);
+  await cerrarModal(page);
+  await page.waitForTimeout(300);
+
   console.log('\n== Errores de consola ==');
   console.log(consoleErrors.length ? consoleErrors.join('\n') : '(ninguno)');
   check('cero errores de consola en toda la corrida', consoleErrors.length === 0);

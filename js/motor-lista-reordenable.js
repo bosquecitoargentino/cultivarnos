@@ -20,6 +20,26 @@
 // (recibe el array de `data-id` en el nuevo orden, como strings). Este
 // módulo solo mueve filas en el DOM y anima el reacomodo.
 
+// Markup del handle, compartido entre "Personalizar inicio" y "Ordenar
+// cultivos" — antes cada uno tenía escrito a mano el mismo botón con el
+// carácter "≡" adentro. Es un ícono SVG a propósito, no texto: en iPhone
+// un carácter de texto puede quedar atrapado en una selección igual que
+// cualquier otra letra de la pantalla; un SVG no participa de eso. No es
+// parte del sistema de 24 íconos curados de js/icons.js (ese catálogo es
+// solo para trazos de la lámina de referencia) — este es un trazo chico
+// aparte, propio de este componente.
+function handleArrastreHtml() {
+  return `
+    <button type="button" class="home-layout-handle" aria-hidden="true" tabindex="-1">
+      <svg class="home-layout-handle-icono" width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+        <rect x="3" y="5" width="14" height="2" rx="1" fill="currentColor"></rect>
+        <rect x="3" y="9" width="14" height="2" rx="1" fill="currentColor"></rect>
+        <rect x="3" y="13" width="14" height="2" rx="1" fill="currentColor"></rect>
+      </svg>
+    </button>
+  `;
+}
+
 function habilitarArrastreListaReordenable(sheet, listEl, { onReordenar, onSoltar }) {
   const UMBRAL_MOVIMIENTO = 8; // px — para distinguir de un tap o de un gesto horizontal
   const DEMORA_HOLD = 130; // ms — "mantener presionado", no un tap
@@ -37,6 +57,13 @@ function habilitarArrastreListaReordenable(sheet, listEl, { onReordenar, onSolta
     e.preventDefault();
     prepararPosibleArrastre(e, fila);
   });
+
+  // Si de todos modos algo (iOS, un navegador distinto) intenta mostrar el
+  // menú contextual de mantener-presionado, se lo evita ACÁ, escopeado
+  // solo a esta lista — nunca globalmente. La solución principal sigue
+  // siendo el CSS de arriba (`.home-layout-list, .home-layout-list *`);
+  // esto es un cinturón de seguridad, no el mecanismo principal.
+  listEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
   function prepararPosibleArrastre(eInicial, fila) {
     const pointerId = eInicial.pointerId;
@@ -94,6 +121,12 @@ function habilitarArrastreListaReordenable(sheet, listEl, { onReordenar, onSolta
   }
 
   function comenzarArrastre(fila, clientY) {
+    // Red de seguridad secundaria: si alguna selección de texto alcanzó a
+    // arrancar durante el mantener-presionado (antes de este punto), se
+    // limpia acá. La solución principal es el CSS de arriba — esto es solo
+    // un refuerzo para el caso raro en que igual algo quedó seleccionado.
+    window.getSelection?.()?.removeAllRanges();
+
     const rect = fila.getBoundingClientRect();
     const listRect = listEl.getBoundingClientRect();
 
