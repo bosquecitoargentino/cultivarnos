@@ -726,52 +726,10 @@ section + section { margin-top: 20px; }
   animation: fadeInUp var(--dur) var(--ease) backwards;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
   cursor: pointer;
-  /* touch-action: none FIJO (no se cambia por JS a mitad de gesto — en
-     iOS/Safari ese cambio no se respeta de forma confiable una vez que el
-     toque ya empezó, ver comentario en habilitarArrastreCultivos en
-     cultivos.js). Como el navegador ya no scrollea por su cuenta al tocar
-     una tarjeta, el scroll de antes de activar el arrastre lo hace ese
-     mismo JS a mano ("modo scroll manual"). No hay user-select/
-     touch-callout acá: aplicarlos siempre desactivaría la selección de
-     texto de la tarjeta todo el tiempo, no solo durante el gesto. Eso
-     vive en .cultivo-card-sujetando, de abajo. */
-  touch-action: none;
 }
 .cultivo-card:active {
   transform: scale(0.97);
   box-shadow: 0 1px 4px rgba(47, 79, 52, 0.1);
-}
-/* Se agrega por JS ni bien empieza el toque (antes incluso de saber si va
-   a terminar en arrastre) y se saca en cuanto el gesto termina, sea cual
-   sea el desenlace — así iOS nunca llega a mostrar su selección/callout
-   durante la ventana de "mantener presionado", sin desactivar la
-   selección de texto normal el resto del tiempo. */
-.cultivo-card-sujetando {
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-}
-/* La tarjeta mientras se arrastra: elevación discreta, nada exagerado. La
-   escala (1.01) se aplica en JS junto con translate3d(x, y, 0) en el mismo
-   transform inline — un transform por CSS acá no tendría efecto, porque el
-   inline siempre gana. Especificidad más alta a propósito, para ganarle a
-   ".cultivo-card:active" de arriba (el dedo sigue "presionando" mientras
-   se arrastra). */
-.cultivo-card-arrastrando,
-.cultivo-card.cultivo-card-arrastrando:active {
-  z-index: 40;
-  box-shadow: 0 10px 24px rgba(0,0,0,0.18);
-  opacity: 0.97;
-}
-.cultivo-card-placeholder {
-  border-radius: var(--radio);
-  background: var(--verde-suave);
-}
-.cultivos-ayuda-orden {
-  font-size: 12px;
-  color: var(--texto-suave);
-  text-align: center;
-  margin: -4px 0 12px;
 }
 .orden-cultivo-estado {
   font-size: 11px;
@@ -1010,7 +968,11 @@ section + section { margin-top: 20px; }
 }
 .checkbox-row input { width: 20px; height: 20px; }
 
-/* ---------- Personalizar inicio ---------- */
+/* ---------- Filas reordenables (Personalizar inicio y Ordenar cultivos) ----------
+   Un solo juego de clases para toda la app: handle "≡" + arrastre con
+   Pointer Events (ver motor-lista-reordenable.js), más ↑/↓ como
+   alternativa accesible. Cualquier lista que necesite "reordenar con
+   handle dentro de un modal" reusa esto en vez de tener su propio CSS. */
 .home-layout-list { margin-top: 4px; position: relative; }
 .home-layout-row {
   display: flex;
@@ -1045,8 +1007,8 @@ section + section { margin-top: 20px; }
 .home-layout-mover-secundario .home-layout-flecha:active { transform: scale(0.9); background: var(--verde-suave); opacity: 1; }
 .home-layout-mover-secundario .home-layout-flecha:disabled { opacity: 0.2; }
 /* El handle "≡": único punto desde el que arranca el arrastre (ver
-   habilitarArrastreHomeLayout en inicio.js). touch-action: none evita que
-   el navegador le dispute el gesto al JS (scroll/zoom) en iOS. */
+   motor-lista-reordenable.js). touch-action: none evita que el navegador
+   le dispute el gesto al JS (scroll/zoom) en iOS. */
 .home-layout-handle {
   width: 36px;
   height: 34px;

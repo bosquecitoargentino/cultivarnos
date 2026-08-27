@@ -5,7 +5,6 @@
 // es un dato agronómico). Guarda solo una lista de IDs.
 
 const ORDEN_CULTIVOS_STORAGE_KEY = 'cultivarnos-orden-cultivos';
-const ORDEN_CULTIVOS_AYUDA_VISTA_KEY = 'cultivarnos-orden-cultivos-ayuda-vista';
 
 function obtenerOrdenCultivosGuardado() {
   try {
@@ -36,22 +35,6 @@ function restaurarOrdenCultivosPorDefecto() {
   }
 }
 
-function yaVioAyudaOrdenCultivos() {
-  try {
-    return localStorage.getItem(ORDEN_CULTIVOS_AYUDA_VISTA_KEY) === '1';
-  } catch (err) {
-    return true; // sin storage, preferimos no insistir con el aviso
-  }
-}
-
-function marcarAyudaOrdenCultivosVista() {
-  try {
-    localStorage.setItem(ORDEN_CULTIVOS_AYUDA_VISTA_KEY, '1');
-  } catch (err) {
-    // no pasa nada si no se puede guardar — en el peor caso se repite el aviso.
-  }
-}
-
 // Aplica la preferencia guardada sobre la lista real de cultivos de hoy:
 // - los que tienen una posición guardada van en ese orden;
 // - los que no (cultivos nuevos, o el primer uso, sin preferencia todavía)
@@ -77,19 +60,4 @@ function ordenarCultivosSegunPreferencia(cultivos) {
     if (!usados.has(c.id)) resultado.push(c);
   });
   return resultado;
-}
-
-// El arrastre en "Mis cultivos" puede pasar mientras se está viendo un
-// filtro (Activos/Finalizados/Todos) — es decir, sobre un SUBCONJUNTO de
-// los cultivos. Esto fusiona el nuevo sub-orden dentro del orden completo
-// existente, sin mover ni un poco a los cultivos que no se estaban viendo
-// en ese momento: cada posición de la secuencia completa que pertenecía a
-// un cultivo visible se reemplaza, en el mismo orden, por el nuevo
-// sub-orden; las posiciones de los cultivos no visibles quedan intactas.
-function guardarOrdenCultivosTrasArrastre(todosLosCultivos, idsVisiblesNuevoOrden) {
-  const secuenciaActual = ordenarCultivosSegunPreferencia(todosLosCultivos).map((c) => c.id);
-  const visibles = new Set(idsVisiblesNuevoOrden);
-  const cola = [...idsVisiblesNuevoOrden];
-  const nuevaSecuencia = secuenciaActual.map((id) => (visibles.has(id) ? cola.shift() : id));
-  guardarOrdenCultivosGuardado(nuevaSecuencia);
 }
