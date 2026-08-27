@@ -20,7 +20,7 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function esDueño(uid) {
+    function esDueno(uid) {
       return autenticado() && request.auth.uid == uid;
     }
 
@@ -33,13 +33,13 @@ service cloud.firestore {
     // ahora").
     // ---------------------------------------------------------------
     match /users/{uid} {
-      allow get: if esDueño(uid);
+      allow get: if esDueno(uid);
       // Nadie necesita listar la colección "users" completa desde el
       // cliente — cada quien solo pide su propio documento por id.
       allow list: if false;
 
-      allow create: if esDueño(uid) && perfilValido();
-      allow update: if esDueño(uid) && perfilValido();
+      allow create: if esDueno(uid) && perfilValido();
+      allow update: if esDueno(uid) && perfilValido();
       allow delete: if false;
 
       // createdAt/updatedAt se escriben con serverTimestamp() (ver
@@ -82,8 +82,8 @@ service cloud.firestore {
       // válidamente solo tiene {deleted, deletedAt, _serverUpdatedAt}.
       // ---------------------------------------------------------------
       match /{coleccion}/{docId} {
-        allow get, list: if esDueño(uid) && coleccion in ['cultivos', 'eventos', 'recordatorios', 'lotesPropagacion'];
-        allow create, update: if esDueño(uid)
+        allow get, list: if esDueno(uid) && coleccion in ['cultivos', 'eventos', 'recordatorios', 'lotesPropagacion'];
+        allow create, update: if esDueno(uid)
           && coleccion in ['cultivos', 'eventos', 'recordatorios', 'lotesPropagacion']
           && registroSincronizableValido();
         allow delete: if false; // siempre tombstone (deleted:true), nunca borrado real desde el cliente
@@ -104,9 +104,9 @@ service cloud.firestore {
       // preferencias puramente visuales (orden manual, layout de Inicio)
       // nunca llegan acá, quedan en localStorage de cada dispositivo.
       match /configuracion/{docId} {
-        allow get: if esDueño(uid) && docId == 'general';
+        allow get: if esDueno(uid) && docId == 'general';
         allow list: if false; // un solo documento conocido ('general'); nunca hace falta listar
-        allow create, update: if esDueño(uid) && docId == 'general' && configuracionValida();
+        allow create, update: if esDueno(uid) && docId == 'general' && configuracionValida();
         allow delete: if false;
 
         function configuracionValida() {
