@@ -105,6 +105,7 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
   const DEMORA_HOLD = 900; // ms — "mantener presionado ~1 segundo"
   const MARGEN_ARRIBA = 70; // px, despeja el header fijo
   const MARGEN_ABAJO = 100; // px, despeja el nav inferior fijo
+  const MARGEN_LATERAL = 4; // px, despeja los bordes de la pantalla
   const VELOCIDAD_AUTOSCROLL = 12; // px por frame, cerca del borde
 
   let drag = null;
@@ -126,6 +127,13 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
     let activado = false;
     let cancelado = false;
 
+    // Se agrega ni bien empieza el toque, no recién al activar el arrastre
+    // — así, si el hold se cumple, iOS ya no tiene ventana de tiempo para
+    // haber arrancado su propia selección de texto. Se saca en TODOS los
+    // caminos de salida (cancelado por scroll, toque normal, o fin de
+    // arrastre) — nunca queda "pegada" en una tarjeta en reposo.
+    card.classList.add('cultivo-card-sujetando');
+
     const timer = setTimeout(() => {
       if (!cancelado) activar();
     }, DEMORA_HOLD);
@@ -133,18 +141,31 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
     function activar() {
       if (activado || cancelado) return;
       activado = true;
+      // Red de seguridad, no el mecanismo principal: si iOS ya alcanzó a
+      // marcar una selección antes de que se cumpliera el hold, se limpia
+      // acá. La prevención real es la clase de arriba + setPointerCapture.
+      try { window.getSelection()?.removeAllRanges(); } catch (err) { /* no-op */ }
+      if (card.setPointerCapture) {
+        try { card.setPointerCapture(pointerId); } catch (err) { /* no-op */ }
+      }
       // Haptic opcional — no todos los navegadores lo tienen (iOS Safari
       // no), y no hace falta: si no existe, esto simplemente no hace nada.
       if (navigator.vibrate) {
         try { navigator.vibrate(10); } catch (err) { /* no-op */ }
       }
-      comenzarArrastre(card, yInicial);
+      comenzarArrastre(card, xInicial, yInicial);
     }
 
     function onMove(e) {
       if (e.pointerId !== pointerId) return;
       if (activado) {
-        if (drag) drag.ultimoClientY = e.clientY;
+        if (drag) {
+          drag.ultimoClientX = e.clientX;
+          drag.ultimoClientY = e.clientY;
+        }
+        // Ya estamos arrastrando: no dejar que el navegador interprete
+        // este mismo gesto como scroll o selección.
+        e.preventDefault();
         return;
       }
       const dx = e.clientX - xInicial;
@@ -155,6 +176,7 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
         // navegador siga con su comportamiento normal.
         cancelado = true;
         clearTimeout(timer);
+        card.classList.remove('cultivo-card-sujetando');
         quitarListeners();
       }
     }
@@ -165,10 +187,13 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
       quitarListeners();
       if (activado) {
         finalizarArrastre();
-      } else if (!cancelado) {
-        // Toque normal (sin mantener, sin moverse): abre la ficha, como
-        // siempre.
-        navigate(`#/cultivo/${card.dataset.id}`);
+      } else {
+        card.classList.remove('cultivo-card-sujetando');
+        if (!cancelado) {
+          // Toque normal (sin mantener, sin moverse): abre la ficha, como
+          // siempre.
+          navigate(`#/cultivo/${card.dataset.id}`);
+        }
       }
     }
 
@@ -177,6 +202,7 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
       clearTimeout(timer);
       quitarListeners();
       if (activado) finalizarArrastre();
+      else card.classList.remove('cultivo-card-sujetando');
     }
 
     function quitarListeners() {
@@ -185,12 +211,12 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
       document.removeEventListener('pointercancel', onCancel);
     }
 
-    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointermove', onMove, { passive: false });
     document.addEventListener('pointerup', onUp);
     document.addEventListener('pointercancel', onCancel);
   }
 
-  function comenzarArrastre(card, clientY) {
+  function comenzarArrastre(card, clientX, clientY) {
     const rect = card.getBoundingClientRect();
 
     const placeholder = document.createElement('div');
@@ -199,17 +225,28 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
     card.parentNode.insertBefore(placeholder, card);
 
     card.classList.add('cultivo-card-arrastrando');
+    // touch-action se desactiva recién ACÁ, solo mientras dura el arrastre
+    // — antes de este punto la tarjeta conserva "pan-y" (scroll vertical
+    // normal). Se restaura en finalizarArrastre.
+    card.style.touchAction = 'none';
     card.style.position = 'fixed';
     card.style.left = rect.left + 'px';
     card.style.top = rect.top + 'px';
     card.style.width = rect.width + 'px';
     card.style.height = rect.height + 'px';
+    card.style.margin = '0';
+    card.style.transform = 'translate3d(0px, 0px, 0) scale(1.01)';
 
     drag = {
       card,
       placeholder,
+      rectLeft: rect.left,
+      rectTop: rect.top,
+      ancho: rect.width,
       altura: rect.height,
-      offsetDentro: clientY - rect.top,
+      offsetDentroX: clientX - rect.left,
+      offsetDentroY: clientY - rect.top,
+      ultimoClientX: clientX,
       ultimoClientY: clientY,
       rafId: null,
     };
@@ -218,27 +255,67 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
 
   function paso() {
     if (!drag) return;
-    posicionarYReordenar(drag.ultimoClientY);
+    posicionarYReordenar(drag.ultimoClientX, drag.ultimoClientY);
     autoScroll(drag.ultimoClientY);
     drag.rafId = requestAnimationFrame(paso);
   }
 
-  // Solo vertical: "left" quedó fijo desde comenzarArrastre y nunca se
-  // vuelve a tocar — el gesto puede derivar levemente en horizontal sin
-  // que la tarjeta lo siga.
-  function posicionarYReordenar(clientY) {
+  // Arrastre libre en X e Y: la tarjeta sigue al dedo/puntero en ambos
+  // ejes (translate3d, sin tocar layout). El reordenamiento se decide con
+  // un hit-test 2D — el vecino más cercano por distancia entre centros,
+  // no un umbral vertical rígido — así funciona tanto en una lista de una
+  // columna como en la grilla de 2 columnas real de "Mis cultivos".
+  function posicionarYReordenar(clientX, clientY) {
+    const minLeft = MARGEN_LATERAL;
+    const maxLeft = Math.max(minLeft, window.innerWidth - MARGEN_LATERAL - drag.ancho);
+    const left = Math.min(Math.max(clientX - drag.offsetDentroX, minLeft), maxLeft);
+
     const minTop = MARGEN_ARRIBA;
     const maxTop = Math.max(minTop, window.innerHeight - MARGEN_ABAJO - drag.altura);
-    const top = Math.min(Math.max(clientY - drag.offsetDentro, minTop), maxTop);
-    drag.card.style.top = top + 'px';
+    const top = Math.min(Math.max(clientY - drag.offsetDentroY, minTop), maxTop);
 
-    const centro = top + drag.altura / 2;
+    const dx = left - drag.rectLeft;
+    const dy = top - drag.rectTop;
+    drag.card.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.01)`;
+
+    const cx = left + drag.ancho / 2;
+    const cy = top + drag.altura / 2;
+
     const cards = Array.from(grid.querySelectorAll('.cultivo-card:not(.cultivo-card-arrastrando)'));
-    let destino = null;
+    if (!cards.length) return;
+
+    let vecino = null;
+    let vecinoRect = null;
+    let mejorDistancia = Infinity;
     for (const c of cards) {
       const r = c.getBoundingClientRect();
-      if (centro < r.top + r.height / 2) { destino = c; break; }
+      const ccx = r.left + r.width / 2;
+      const ccy = r.top + r.height / 2;
+      const distancia = (cx - ccx) ** 2 + (cy - ccy) ** 2;
+      if (distancia < mejorDistancia) {
+        mejorDistancia = distancia;
+        vecino = c;
+        vecinoRect = r;
+      }
     }
+    if (!vecino) return;
+
+    // ¿Antes o después del vecino más cercano? Primero se compara la fila
+    // (con un margen dinámico = mitad de la altura del propio vecino, no
+    // un número fijo), y solo si están en la misma fila se compara la
+    // columna — así se generaliza a 1 columna (la comparación de columna
+    // nunca importa) y a la grilla de 2 columnas real de la app.
+    const epsilonFila = vecinoRect.height / 2;
+    const vecinoCy = vecinoRect.top + vecinoRect.height / 2;
+    const vecinoCx = vecinoRect.left + vecinoRect.width / 2;
+    let antesDelVecino;
+    if (Math.abs(cy - vecinoCy) > epsilonFila) {
+      antesDelVecino = cy < vecinoCy;
+    } else {
+      antesDelVecino = cx < vecinoCx;
+    }
+    const destino = antesDelVecino ? vecino : vecino.nextElementSibling;
+
     const siguienteActual = drag.placeholder.nextElementSibling;
     if (destino !== siguienteActual && destino !== drag.placeholder) {
       animarReacomodo(cards, () => {
@@ -248,18 +325,21 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
     }
   }
 
-  // FLIP chico, igual criterio que Personalizar inicio: en vez de que las
-  // tarjetas "salten" al nuevo lugar, se animan desde donde estaban hasta
-  // donde quedan (120-180ms, sin rebote, mismas variables de motion que
-  // ya usa el resto de la app).
+  // FLIP chico, igual criterio que Personalizar inicio, pero ahora en 2D:
+  // en vez de que las tarjetas "salten" al nuevo lugar, se animan desde
+  // donde estaban hasta donde quedan (120-180ms, sin rebote, mismas
+  // variables de motion que ya usa el resto de la app).
   function animarReacomodo(cards, mutar) {
-    const antes = new Map(cards.map((c) => [c, c.getBoundingClientRect().top]));
+    const antes = new Map(cards.map((c) => [c, c.getBoundingClientRect()]));
     mutar();
     cards.forEach((c) => {
-      const delta = antes.get(c) - c.getBoundingClientRect().top;
-      if (!delta) return;
+      const rectAntes = antes.get(c);
+      const rectDespues = c.getBoundingClientRect();
+      const dx = rectAntes.left - rectDespues.left;
+      const dy = rectAntes.top - rectDespues.top;
+      if (!dx && !dy) return;
       c.style.transition = 'none';
-      c.style.transform = `translateY(${delta}px)`;
+      c.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
       requestAnimationFrame(() => {
         c.style.transition = 'transform var(--motion-base) var(--ease-soft)';
         c.style.transform = '';
@@ -267,6 +347,8 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
     });
   }
 
+  // El auto-scroll sigue siendo solo vertical (no se crea scroll horizontal
+  // nuevo — la grilla no lo necesita).
   function autoScroll(clientY) {
     if (clientY < MARGEN_ARRIBA) window.scrollBy(0, -VELOCIDAD_AUTOSCROLL);
     else if (clientY > window.innerHeight - MARGEN_ABAJO) window.scrollBy(0, VELOCIDAD_AUTOSCROLL);
@@ -283,7 +365,11 @@ function habilitarArrastreCultivos(grid, todosLosCultivos, onReordenado) {
     card.style.top = '';
     card.style.width = '';
     card.style.height = '';
+    card.style.margin = '';
+    card.style.transform = '';
+    card.style.touchAction = '';
     card.classList.remove('cultivo-card-arrastrando');
+    card.classList.remove('cultivo-card-sujetando');
 
     const idsVisiblesNuevoOrden = Array.from(grid.querySelectorAll('.cultivo-card')).map((c) => Number(c.dataset.id));
     guardarOrdenCultivosTrasArrastre(todosLosCultivos, idsVisiblesNuevoOrden);
