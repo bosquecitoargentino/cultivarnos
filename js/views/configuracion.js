@@ -12,6 +12,8 @@ async function renderConfiguracion(root) {
       <p>Esto ajusta las sugerencias de temporada a tu zona.</p>
     </div>
 
+    ${seccionCuentaHtml()}
+
     <section>
       <div class="section-title">Hemisferio</div>
       <div class="chip-group" id="config-hemisferio">
@@ -39,6 +41,8 @@ async function renderConfiguracion(root) {
       <p class="config-version">Cultivarnos · Versión ${escapeHtml(version)}</p>
     </section>` : ''}
   `;
+
+  vincularSeccionCuenta(root);
 
   const chipGroup = root.querySelector('#config-hemisferio');
   chipGroup.addEventListener('click', async (e) => {
@@ -138,4 +142,70 @@ function textoEstadoUbicacion(config) {
 function textoUltimoRespaldo(config) {
   if (!config.ultimoRespaldo) return 'Todavía no hiciste un respaldo.';
   return `Último respaldo: ${formatFecha(config.ultimoRespaldo)}`;
+}
+
+// ---------------------------------------------------------------------
+// Cuenta (Firebase Authentication + Sync Engine) — usuario, email,
+// estado de sincronización, cerrar sesión, restablecer contraseña. Es un
+// snapshot al momento de renderizar (mismo criterio que el resto de esta
+// pantalla: se lee una vez, sin suscripción en vivo — volver a entrar
+// acá refresca el estado; no hay "estado pendiente" mostrado con
+// insistencia en ningún otro lado, esto es discreto a propósito). Si
+// CultivarnosAuth no existe (el módulo no cargó) o no hay sesión, la
+// sección no se muestra — no debería ser alcanzable de todos modos, el
+// gate de app.js ya manda a /bienvenida sin sesión.
+// ---------------------------------------------------------------------
+
+function seccionCuentaHtml() {
+  if (!window.CultivarnosAuth) return '';
+  const est = window.CultivarnosAuth.getEstado();
+  if (!est.usuario) return '';
+
+  const estSync = window.CultivarnosSync ? window.CultivarnosSync.obtenerEstado() : { estado: 'inactivo' };
+  const textoSync = {
+    sincronizado: '✓ Sincronizado',
+    sincronizando: 'Sincronizando…',
+    pendiente: 'Pendiente de sincronizar',
+    'sin-conexion': 'Sin conexión — se sincroniza cuando vuelva',
+    'espera-decision-huerta-local': 'Pendiente de sincronizar',
+    inactivo: 'Sin sincronizar',
+  }[estSync.estado] || 'Sin sincronizar';
+
+  const username = (est.perfil && est.perfil.username) || '(sin nombre de usuario)';
+  const email = est.usuario.email || '';
+  const esProveedorPassword = est.usuario.providerId !== 'google.com';
+
+  return `
+    <section>
+      <div class="section-title">Cuenta</div>
+      <div class="cuenta-fila"><span>Usuario</span><span>${escapeHtml(username)}</span></div>
+      ${email ? `<div class="cuenta-fila"><span>Email</span><span>${escapeHtml(email)}</span></div>` : ''}
+      <div class="cuenta-fila"><span>Sincronización</span><span>${escapeHtml(textoSync)}</span></div>
+      ${esProveedorPassword ? '<button type="button" id="cuenta-btn-restablecer" class="link-small">Restablecer contraseña</button>' : ''}
+      <button type="button" id="cuenta-btn-cerrar-sesion" class="btn-secondary" style="margin-top:10px;">Cerrar sesión</button>
+    </section>
+  `;
+}
+
+function vincularSeccionCuenta(root) {
+  const btnCerrar = root.querySelector('#cuenta-btn-cerrar-sesion');
+  if (btnCerrar) {
+    btnCerrar.addEventListener('click', async () => {
+      btnCerrar.disabled = true;
+      await window.CultivarnosAuth.cerrarSesion();
+      // CultivarnosAuth.onCambio() en app.js manda a /bienvenida solo.
+    });
+  }
+
+  const btnRestablecer = root.querySelector('#cuenta-btn-restablecer');
+  if (btnRestablecer) {
+    btnRestablecer.addEventListener('click', async () => {
+      const est = window.CultivarnosAuth.getEstado();
+      if (!est.usuario || !est.usuario.email) return;
+      btnRestablecer.disabled = true;
+      const resultado = await window.CultivarnosAuth.enviarRecuperarPassword(est.usuario.email);
+      showToast((resultado && resultado.mensaje) || (resultado.ok ? 'Listo' : 'No se pudo enviar el correo'));
+      btnRestablecer.disabled = false;
+    });
+  }
 }

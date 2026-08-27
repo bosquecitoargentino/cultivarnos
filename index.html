@@ -19,11 +19,21 @@
 <meta name="apple-mobile-web-app-title" content="Cultivarnos" />
 <link rel="stylesheet" href="css/styles.css" />
 </head>
-<body>
+<body class="sin-sesion">
+<!-- "sin-sesion" arranca puesta a propósito (oculta nav inferior + menú
+     ⋯ por defecto, ver css/styles.css) para que no haya un parpadeo de
+     esos elementos antes de que se sepa si hay sesión — js/app.js#router()
+     la saca en cuanto confirma que sí la hay. -->
 
 <header class="topbar">
   <div class="topbar-title">
     <img src="assets/logo-cultivarnos.svg" alt="Cultivarnos" class="topbar-logo" width="26" height="26" />
+    <!-- Indicador chico y discreto de sync pendiente/sin conexión — un
+         punto sobre el logo, sin texto ni banner. Solo se muestra en esos
+         dos estados (ver actualizarIndicadorSync() en app.js); el detalle
+         completo del estado de sincronización vive en Configuración >
+         Cuenta, no acá. -->
+    <span id="sync-indicador" class="sync-indicador hidden"></span>
   </div>
   <button id="btn-menu" class="icon-btn" aria-label="Más opciones" title="Más opciones"></button>
 </header>
@@ -72,6 +82,20 @@
 <script src="js/icons.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/db.js"></script>
+
+<!-- Identidad + cuenta + sincronización (Firebase). ES modules a
+     propósito, distinto del resto de la app (ver comentario al inicio de
+     js/firebase/firebase-config.js) — cada uno expone su API en
+     window.CultivarnosAuth / window.CultivarnosSync para que el resto de
+     la app, clásico, los consuma sin volverse módulo también. Los
+     módulos siempre se ejecutan después de todos los <script> clásicos
+     de esta página (mismo orden de "diferido" que defer), así que
+     window.DB ya existe cuando estos corren, sin necesitar nada especial
+     acá para garantizarlo. -->
+<script type="module" src="js/firebase/firebase-config.js"></script>
+<script type="module" src="js/firebase/firebase-auth.js"></script>
+<script type="module" src="js/firebase/firebase-sync.js"></script>
+
 <script src="js/data/cultivos-data.js"></script>
 <script src="js/data/biblioteca-especies.js"></script>
 <script src="js/motor-biblioteca.js"></script>
@@ -102,6 +126,7 @@
 <script src="js/views/banco-nuevo.js"></script>
 <script src="js/views/banco-detalle.js"></script>
 <script src="js/views/riego-multiple.js"></script>
+<script src="js/views/auth.js"></script>
 <script src="js/app.js"></script>
 <script>
   // Pintar los íconos del sistema (js/icons.js) en los elementos "fijos"

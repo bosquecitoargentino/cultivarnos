@@ -11,7 +11,7 @@
 // (ej. la pantalla de Configuración) NO tiene su propia copia del número:
 // lo consulta en tiempo de ejecución mandándole un mensaje a este Service
 // Worker (ver utils.js#obtenerVersionApp). Una sola fuente de verdad real.
-const APP_VERSION = '1.21.1';
+const APP_VERSION = '1.22.0';
 
 const CACHE_NAME = `cultivarnos-v${APP_VERSION}`;
 const APP_SHELL = [
@@ -23,6 +23,21 @@ const APP_SHELL = [
   './js/icons.js',
   './js/db.js',
   './js/utils.js',
+  // Identidad + cuenta + sincronización (Firebase) — mismo motivo que
+  // cualquier otro <script> de esta lista: sin esto acá, en el primer
+  // arranque de la PWA (antes de que este Service Worker termine de
+  // instalarse y tome control) el listener de 'fetch' de más abajo
+  // todavía no intercepta nada, así que estos archivos NO quedarían
+  // cacheados solos con el cacheo en tiempo de ejecución — recién en una
+  // segunda visita con red. Precachearlos acá garantiza que estén
+  // disponibles offline desde la primera instalación, igual que el resto
+  // del App Shell. (Esto es distinto del SDK de Firebase en sí, que se
+  // importa dinámicamente desde gstatic.com — cross-origin, `response.type`
+  // 'cors'/'opaque' — y a propósito NO se cachea acá: ver el comentario en
+  // el listener de 'fetch' más abajo.)
+  './js/firebase/firebase-config.js',
+  './js/firebase/firebase-auth.js',
+  './js/firebase/firebase-sync.js',
   './js/data/cultivos-data.js',
   './js/data/biblioteca-especies.js',
   './js/motor-biblioteca.js',
@@ -53,6 +68,7 @@ const APP_SHELL = [
   './js/views/banco-nuevo.js',
   './js/views/banco-detalle.js',
   './js/views/riego-multiple.js',
+  './js/views/auth.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
@@ -150,6 +166,15 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
+        // `response.type === 'basic'` de paso excluye, a propósito, los
+        // imports dinámicos del SDK de Firebase (gstatic.com/firebasejs —
+        // ver js/firebase/firebase-config.js): al ser cross-origin llegan
+        // acá con type 'cors' u 'opaque', nunca 'basic', así que nunca se
+        // cachean. Es lo que corresponde: Firebase mismo decide cuándo
+        // conviene cachear su propio SDK, y `firebase-config.js` ya está
+        // escrito para funcionar sin red de todos modos (ver el try/catch
+        // de `inicializar()` ahí) — no hace falta ni conviene que este
+        // Service Worker intente cachear un CDN de terceros.
         if (response && response.status === 200 && response.type === 'basic') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));

@@ -159,6 +159,7 @@ a { color: inherit; text-decoration: none; }
    tokens --crema/--radio-chico que ya usa el resto de la app), así no
    hace falta un color de fondo pegado adentro del archivo del logo. */
 .topbar-title {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -173,6 +174,23 @@ a { color: inherit; text-decoration: none; }
   width: 26px;
   height: 26px;
 }
+
+/* Punto de sync pendiente/offline sobre la placa del logo — discreto a
+   propósito (ver comentario en index.html). El color lo pone la clase
+   modificadora que agrega actualizarIndicadorSync() en app.js; sin
+   modificador (o con .hidden) no se ve nada. */
+.sync-indicador {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--verde-oscuro);
+}
+.sync-indicador.hidden { display: none; }
+.sync-indicador-pendiente { background: #c9a227; }
+.sync-indicador-offline { background: var(--alerta); }
 
 .icon-btn {
   background: transparent;
@@ -2173,5 +2191,123 @@ button.link-ver-todas:active { transform: scale(0.98); }
   font-weight: 600;
   color: var(--verde);
   cursor: pointer;
+}
+
+/* ---------- Cuenta / autenticación (Firebase) ----------
+   Reusa tokens y patrones existentes (.btn-primary/.btn-secondary,
+   .form-group/.form-input, --verde/--alerta/--texto-suave) — nada de
+   componentes nuevos, solo el layout propio de estas pantallas
+   (bienvenida/crear cuenta/iniciar sesión/elegir usuario/vincular huerta)
+   y los estados chicos que no existían (error de formulario, hint de
+   verificación de usuario). */
+
+.auth-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 48px 8px 24px;
+}
+.auth-logo { border-radius: 16px; margin-bottom: 6px; }
+.auth-titulo {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--verde-oscuro);
+}
+.auth-subtitulo {
+  color: var(--texto-suave);
+  font-size: 14px;
+  margin-bottom: 18px;
+}
+/* Los 2-3 botones de .auth-shell (Crear cuenta / Iniciar sesión / Google,
+   o Guardar mi huerta / Empezar de cero) ya son .btn-primary/.btn-secondary
+   (width:100%), así que solo hace falta el ancho máximo + separación del
+   contenedor — sin tocar esas clases. */
+.auth-shell .btn-primary,
+.auth-shell .btn-secondary {
+  max-width: 320px;
+}
+.auth-shell .btn-secondary + .btn-secondary,
+.auth-shell .btn-primary + .btn-secondary {
+  margin-top: 10px;
+}
+
+.auth-form { margin-top: 4px; }
+.auth-links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  font-size: 13px;
+}
+.auth-links a { color: var(--verde); font-weight: 600; }
+.auth-links a:active { opacity: 0.6; }
+
+.form-error {
+  background: #fbeae5;
+  border: 1px solid var(--alerta);
+  color: var(--alerta);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 12px;
+  border-radius: var(--radio-chico);
+  margin-bottom: 16px;
+}
+.form-error.hidden { display: none; }
+.form-ok {
+  background: var(--verde-suave);
+  border: 1px solid var(--verde);
+  color: var(--verde-oscuro);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 12px;
+  border-radius: var(--radio-chico);
+  margin-bottom: 16px;
+}
+.form-ok.hidden { display: none; }
+
+.form-hint {
+  font-size: 12px;
+  color: var(--texto-suave);
+  margin-top: 6px;
+  min-height: 15px;
+}
+.form-hint-error { color: var(--alerta); }
+.form-hint-ok { color: var(--verde); font-weight: 600; }
+
+/* ---------- Cuenta (dentro de Configuración) ---------- */
+.cuenta-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--borde);
+  font-size: 14px;
+}
+.cuenta-fila:first-of-type { border-top: none; padding-top: 0; }
+.cuenta-fila span:first-child { color: var(--texto-suave); }
+.cuenta-fila span:last-child {
+  color: var(--verde-oscuro);
+  font-weight: 600;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+/* Mientras no hay sesión (body.sin-sesion, ver index.html) se oculta el
+   shell de navegación normal de la app — no tiene sentido mostrar el nav
+   inferior ni el menú "···" en las pantallas de bienvenida/login, y
+   evita además que alguien navegue "por afuera" del gate a una vista que
+   todavía no debería poder ver. Se puso la clase en <body> desde el HTML
+   estático a propósito (ver comentario ahí) para que no haya parpadeo
+   antes de que router() confirme si hay sesión o no. */
+body.sin-sesion #bottom-nav,
+body.sin-sesion #btn-menu {
+  display: none;
 }
 .mas-detalles[open] summary { margin-bottom: 4px; }

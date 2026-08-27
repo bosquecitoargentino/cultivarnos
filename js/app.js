@@ -13,9 +13,93 @@ const ROUTES = {
   '#/espacios': { render: renderEspacios, nav: null },
   '#/banco': { render: renderBanco, nav: null },
   '#/banco/nuevo': { render: renderBancoNuevo, nav: null },
+  // Cuenta (ver js/views/auth.js) — pantallas sin nav inferior, se
+  // muestran o no según el gate de sesión de decidirDestino() más abajo.
+  '#/bienvenida': { render: renderBienvenida, nav: null },
+  '#/crear-cuenta': { render: renderCrearCuenta, nav: null },
+  '#/iniciar-sesion': { render: renderIniciarSesion, nav: null },
+  '#/recuperar-contrasena': { render: renderRecuperarContrasena, nav: null },
+  '#/elegir-usuario': { render: renderElegirUsername, nav: null },
+  '#/vincular-huerta': { render: renderVincularHuerta, nav: null },
   // '#/cultivo/:id', '#/biblioteca/:id', '#/espacios/:clave' y '#/banco/:id'
   // se manejan aparte
 };
+
+// Rutas visibles SIN sesión — cualquier otra ruta, sin sesión, redirige a
+// '#/bienvenida' (ver decidirDestino). '#/elegir-usuario' y
+// '#/vincular-huerta' están fuera de este set a propósito: solo tienen
+// sentido CON sesión (usuario autenticado sin perfil todavía, o con
+// perfil pero con una huerta local sin resolver) — decidirDestino las
+// redirige por su cuenta cuando corresponde, nunca hace falta pedirlas
+// directamente sin sesión.
+const RUTAS_AUTH_SIN_SESION = new Set(['#/bienvenida', '#/crear-cuenta', '#/iniciar-sesion', '#/recuperar-contrasena']);
+
+function estaAutenticado() {
+  const est = window.CultivarnosAuth && window.CultivarnosAuth.getEstado();
+  return !!(est && est.usuario);
+}
+
+// uid para el que ya se llamó CultivarnosSync.iniciar() en esta carga de
+// página — evita reiniciar el Sync Engine en cada re-evaluación de ruta.
+let syncIniciadoParaUid = null;
+
+async function asegurarSyncIniciado(uid, perfil) {
+  if (!window.CultivarnosSync || syncIniciadoParaUid === uid) return;
+  syncIniciadoParaUid = uid;
+  await window.CultivarnosSync.iniciar({ uid, perfil });
+}
+
+// Sin sesión confirmada por Firebase PERO este dispositivo tenía una
+// sesión cacheada (localStorage) y Firebase no está disponible ahora
+// mismo (sin red, CDN bloqueado): se prioriza seguir mostrando la huerta
+// ya descargada en vez de bloquear a la persona por falta de señal — ver
+// "nunca perder acceso a los propios datos por estar offline" en
+// docs/firebase-architecture.md. No arranca el Sync Engine de verdad acá
+// (no hay red); se arranca solo cuando CultivarnosAuth confirme sesión
+// real (dispara router() de nuevo vía onCambio, ver el listener abajo).
+async function continuarModoOfflineConUid(uid) {
+  if (syncIniciadoParaUid === uid) return;
+  await DB.usarBaseDeDatos(`cultivarnos-${uid}`);
+  syncIniciadoParaUid = uid;
+}
+
+// El gate de sesión: decide a qué ruta corresponde ir de verdad dado el
+// estado actual de autenticación, sin tocar en absoluto la lógica de
+// parseRoute/ROUTES de arriba (reusa exactamente el mismo mecanismo de
+// fallback que ya existía: "la ruta pedida, u otra si no corresponde").
+// Devuelve la MISMA ruta pedida cuando no hace falta redirigir.
+async function decidirDestino(pathSolicitado) {
+  // Sin CultivarnosAuth en absoluto (el módulo no llegó a cargar) -> la
+  // app sigue funcionando exactamente como antes de esta integración,
+  // sin ningún gate.
+  if (!window.CultivarnosAuth) return pathSolicitado;
+
+  try { await window.CultivarnosAuth.ready(); } catch (err) { console.warn(err); }
+  const est = window.CultivarnosAuth.getEstado();
+
+  if (!est.usuario) {
+    const uidCacheado = window.CultivarnosAuth.obtenerUidActivoCacheado();
+    if (uidCacheado && !est.firebaseDisponible) {
+      await continuarModoOfflineConUid(uidCacheado);
+      return RUTAS_AUTH_SIN_SESION.has(pathSolicitado) ? '#/inicio' : pathSolicitado;
+    }
+    if (window.CultivarnosSync) window.CultivarnosSync.detener();
+    syncIniciadoParaUid = null;
+    await DB.usarBaseDeDatos('cultivarnos');
+    return RUTAS_AUTH_SIN_SESION.has(pathSolicitado) ? pathSolicitado : '#/bienvenida';
+  }
+
+  if (est.necesitaUsername) return '#/elegir-usuario';
+
+  await asegurarSyncIniciado(est.usuario.uid, est.perfil);
+  const estSync = window.CultivarnosSync && window.CultivarnosSync.obtenerEstado();
+  if (estSync && estSync.estado === 'espera-decision-huerta-local') return '#/vincular-huerta';
+
+  if (RUTAS_AUTH_SIN_SESION.has(pathSolicitado) || pathSolicitado === '#/elegir-usuario' || pathSolicitado === '#/vincular-huerta') {
+    return '#/inicio';
+  }
+  return pathSolicitado;
+}
 
 function parseRoute(hash) {
   // Separamos el query string (ej. #/nuevo?especie=tomate, usado por
@@ -50,9 +134,22 @@ function parseRoute(hash) {
 }
 
 async function router() {
-  const hash = window.location.hash || '#/inicio';
-  const route = parseRoute(hash);
+  const hashOriginal = window.location.hash || '#/inicio';
+  const pathSolicitado = hashOriginal.split('?')[0];
+  const destino = await decidirDestino(pathSolicitado);
+
+  if (destino !== pathSolicitado) {
+    // Redirige de verdad (cambia el hash visible) en vez de solo pintar
+    // otra cosa — así "atrás" del navegador y recargar la página se
+    // comportan como se espera. El cambio de hash dispara 'hashchange',
+    // que vuelve a llamar a router().
+    window.location.hash = destino;
+    return;
+  }
+
+  const route = parseRoute(hashOriginal);
   updateNavActive(route.nav);
+  document.body.classList.toggle('sin-sesion', !estaAutenticado());
   APP_ROOT.classList.add('fading');
   try {
     await route.render(APP_ROOT);
@@ -123,8 +220,43 @@ window.addEventListener('DOMContentLoaded', () => {
     navRegistrar.addEventListener('click', openRegistrarSheet);
   }
 
+  // Reevalúa la ruta actual cada vez que cambia el estado de sesión
+  // (login, logout, perfil recién creado) — así js/views/auth.js no
+  // necesita llamar navigate() a mano después de cada acción, el gate de
+  // arriba se encarga solo de mandar a donde corresponda.
+  if (window.CultivarnosAuth) {
+    window.CultivarnosAuth.onCambio(() => { router(); });
+  }
+
+  // Indicador chico de sync (ver .sync-indicador en styles.css) — se
+  // actualiza solo, en segundo plano, cada vez que cambia el estado del
+  // Sync Engine. No dispara ningún render de vista, solo toca ese punto.
+  if (window.CultivarnosSync) {
+    window.CultivarnosSync.onCambio(actualizarIndicadorSync);
+    actualizarIndicadorSync();
+  }
+
   inicializarServiceWorker();
 });
+
+// Estados "que ameritan avisar, discretamente": sin conexión (todavía no
+// se pudo sincronizar) o pendiente (se intentó y falló, se reintenta solo
+// en el próximo ciclo). El resto de los estados ('sincronizado',
+// 'sincronizando', 'inactivo', 'espera-decision-huerta-local') no
+// necesitan un aviso permanente en la topbar — el detalle completo sigue
+// disponible en Configuración > Cuenta para quien lo busque.
+const ESTADOS_SYNC_CON_AVISO = {
+  'sin-conexion': 'sync-indicador-offline',
+  pendiente: 'sync-indicador-pendiente',
+};
+
+function actualizarIndicadorSync() {
+  const el = document.getElementById('sync-indicador');
+  if (!el || !window.CultivarnosSync) return;
+  const estado = window.CultivarnosSync.obtenerEstado();
+  const clase = ESTADOS_SYNC_CON_AVISO[estado.estado];
+  el.className = clase ? `sync-indicador ${clase}` : 'sync-indicador hidden';
+}
 
 // ---------------------------------------------------------------------
 // Service Worker: registro + aviso de actualización disponible.

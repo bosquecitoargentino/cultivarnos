@@ -1,0 +1,154 @@
+rules_version = '2';
+
+// firestore.rules — Cultivarnos, Beta V1.
+//
+// Principio: deny-by-default. La regla "catch-all" al final de este
+// archivo cierra CUALQUIER ruta que no esté explícitamente permitida
+// arriba — si algún día se agrega una colección nueva y alguien se
+// olvida de escribirle sus propias reglas, el default es "nadie puede
+// leer ni escribir ahí", nunca al revés.
+//
+// Ver docs/firebase-architecture.md para el razonamiento completo
+// (modelo de datos, por qué cada regla es como es, qué falta evaluar
+// antes de un lanzamiento público real — en particular App Check, que
+// NO está implementado todavía y queda listado ahí como pendiente).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function autenticado() {
+      return request.auth != null;
+    }
+
+    function esDueño(uid) {
+      return autenticado() && request.auth.uid == uid;
+    }
+
+    // ---------------------------------------------------------------
+    // users/{uid} — perfil mínimo (username, proveedor, timestamps).
+    // A propósito NO guarda el email acá (ya vive en Firebase Auth,
+    // fuera de Firestore — minimizar PII duplicada). Nunca se borra
+    // desde el cliente: "eliminar cuenta" está fuera del alcance de
+    // esta beta (ver docs/firebase-architecture.md, "Qué NO se hace
+    // ahora").
+    // ---------------------------------------------------------------
+    match /users/{uid} {
+      allow get: if esDueño(uid);
+      // Nadie necesita listar la colección "users" completa desde el
+      // cliente — cada quien solo pide su propio documento por id.
+      allow list: if false;
+
+      allow create: if esDueño(uid) && perfilValido();
+      allow update: if esDueño(uid) && perfilValido();
+      allow delete: if false;
+
+      // createdAt/updatedAt se escriben con serverTimestamp() (ver
+      // elegirUsername() en firebase-auth.js) — no se les exige acá un
+      // tipo puntual (timestamp vs. el valor que Firestore les da
+      // durante la validación de la regla puede variar entre versiones
+      // del SDK): lo que importa validar de verdad es el username, que
+      // es un valor literal del cliente, no un sentinel del servidor.
+      function perfilValido() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['username', 'authProvider', 'createdAt', 'updatedAt'])
+          && d.keys().hasAll(['username', 'authProvider', 'createdAt', 'updatedAt'])
+          && d.username is string
+          && d.username.size() >= 3 && d.username.size() <= 24
+          && d.username.matches('^[a-z0-9_]+$')
+          && d.authProvider is string;
+      }
+
+      // ---------------------------------------------------------------
+      // Datos sincronizables: cultivos, eventos, recordatorios y lotes
+      // de propagación. Documento por id `${deviceId}__${localId}` (ver
+      // docs/firebase-architecture.md, "IDs y colisión entre
+      // dispositivos") — el id en sí no se valida acá (ya lo controla el
+      // path), solo el contenido del documento.
+      //
+      // No se intenta replicar el esquema completo de cada tipo de
+      // registro (cultivo/evento/recordatorio/lote tienen formas
+      // distintas, y ese esquema puede evolucionar sin tocar este
+      // archivo) — se valida lo que es igual para los cuatro y lo que
+      // importa para que el motor de sincronización funcione bien:
+      // `deleted` siempre presente con el tipo correcto, `localId`/
+      // `updatedAt` con el tipo correcto CUANDO están presentes, y un
+      // tope de tamaño razonable contra documentos anormalmente grandes.
+      //
+      // `localId`/`updatedAt` no son obligatorios en todo escritura:
+      // propagarBajas() en firebase-sync.js escribe una baja con
+      // set(..., {merge:true}) que puede terminar siendo el PRIMER
+      // documento para un registro que se creó y se borró localmente
+      // antes de alcanzar a sincronizarse ni una vez — ese documento
+      // válidamente solo tiene {deleted, deletedAt, _serverUpdatedAt}.
+      // ---------------------------------------------------------------
+      match /{coleccion}/{docId} {
+        allow get, list: if esDueño(uid) && coleccion in ['cultivos', 'eventos', 'recordatorios', 'lotesPropagacion'];
+        allow create, update: if esDueño(uid)
+          && coleccion in ['cultivos', 'eventos', 'recordatorios', 'lotesPropagacion']
+          && registroSincronizableValido();
+        allow delete: if false; // siempre tombstone (deleted:true), nunca borrado real desde el cliente
+
+        function registroSincronizableValido() {
+          let d = request.resource.data;
+          return d.keys().hasAll(['deleted'])
+            && d.deleted is bool
+            && (!('localId' in d) || d.localId is number)
+            && (!('updatedAt' in d) || d.updatedAt is string)
+            && d.size() < 40;
+        }
+      }
+
+      // configuracion/general — único documento, solo el subconjunto de
+      // preferencias con sentido entre dispositivos (ver
+      // CAMPOS_CONFIGURACION_SINCRONIZABLES en firebase-sync.js). Las
+      // preferencias puramente visuales (orden manual, layout de Inicio)
+      // nunca llegan acá, quedan en localStorage de cada dispositivo.
+      match /configuracion/{docId} {
+        allow get: if esDueño(uid) && docId == 'general';
+        allow list: if false; // un solo documento conocido ('general'); nunca hace falta listar
+        allow create, update: if esDueño(uid) && docId == 'general' && configuracionValida();
+        allow delete: if false;
+
+        function configuracionValida() {
+          return request.resource.data.keys()
+            .hasOnly(['hemisferio', 'lat', 'lon', 'region', 'clima', 'tipoSuelo']);
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // usernames/{normalizado} — índice de disponibilidad + reserva
+    // atómica (ver elegirUsername() en firebase-auth.js, que escribe
+    // este documento y el de users/{uid} en la misma runTransaction).
+    //
+    // - `get` (un id puntual): cualquier autenticado, para el chequeo de
+    //   disponibilidad en vivo mientras se escribe el username.
+    // - `list` (traer la colección entera o filtrar): nunca desde el
+    //   cliente — evita poder scrapear todos los usernames existentes.
+    // - `create`: solo si el documento todavía no existe (primera
+    //   reserva) y el uid del payload coincide con quien está
+    //   autenticado — nadie puede reservar un username "para otro uid".
+    // - `update`/`delete`: nunca desde el cliente. Un username, una vez
+    //   tomado, no se libera ni se reasigna en esta beta.
+    // ---------------------------------------------------------------
+    match /usernames/{username} {
+      allow get: if autenticado();
+      allow list: if false;
+      allow create: if autenticado()
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid
+        && !exists(/databases/$(database)/documents/usernames/$(username));
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------
+    // Deny-by-default: cualquier otra ruta (colecciones futuras que
+    // todavía no tienen sus propias reglas, intentos de leer/escribir
+    // fuera de lo anterior) queda cerrada.
+    // ---------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
