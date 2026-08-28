@@ -16,7 +16,11 @@ directamente.
 ## 1. Resumen de lo implementado
 
 - **Autenticación**: Firebase Authentication, solo Email/Password y
-  Google Sign-In (redirect en móvil/PWA instalada, popup en escritorio).
+  Google Sign-In (siempre vía `signInWithPopup()`, en todos los
+  dispositivos — ver `REPORTE-GOOGLE-SIGNIN.md`: la variante con
+  `signInWithRedirect()` para móvil, que era el plan original, se
+  descartó porque depende de un iframe cross-origin que Safari/iOS
+  bloquea por defecto).
 - **Identidad propia**: un username elegido por la persona (3–24
   caracteres, `[a-z0-9_]`), separado del uid y del email, reservado de
   forma atómica.

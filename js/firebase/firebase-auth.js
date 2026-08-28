@@ -179,11 +179,12 @@ async function iniciar() {
     return;
   }
 
-  // Completa un login con Google que haya usado signInWithRedirect (ver
-  // iniciarSesionConGoogle) — si no había ningún redirect pendiente,
-  // esto resuelve null sin efecto. Errores acá se loguean, nunca rompen
-  // el arranque.
-  try { await ctx.authMod.getRedirectResult(ctx.auth); } catch (err) { console.warn('[Cultivarnos] getRedirectResult:', err); }
+  // No hay ningún getRedirectResult() acá a propósito: iniciarSesionConGoogle()
+  // usa siempre signInWithPopup(), nunca signInWithRedirect() (ver el
+  // comentario largo ahí — el redirect se rompe en Safari/iOS con "The
+  // requested action is invalid"). onAuthStateChanged de abajo es lo único
+  // que hace falta para detectar la sesión, tanto la de un popup recién
+  // completado como la de una visita futura ya logueada.
 
   ctx.authMod.onAuthStateChanged(ctx.auth, async (user) => {
     if (!user) {
@@ -317,24 +318,25 @@ async function iniciarSesionConEmail({ email, password }) {
   }
 }
 
-function esMovilOInstalada() {
-  const standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
-  const movil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
-  return !!(standalone || movil);
-}
-
+// Antes elegía signInWithRedirect() en móvil/PWA instalada y
+// signInWithPopup() en escritorio, siguiendo lo que era la recomendación
+// histórica de Firebase. Se cambió a usar SIEMPRE signInWithPopup():
+// signInWithRedirect() depende de un iframe cross-origin hacia el
+// authDomain (acá, cultivarnos-8331b.firebaseapp.com) para completar el
+// login, y los navegadores actuales — Safari en iOS en particular, que es
+// donde esta app se usa como PWA — bloquean por defecto ese acceso a
+// almacenamiento de terceros, lo que rompe el redirect con el error
+// "The requested action is invalid" (confirmado en producción, ver
+// REPORTE-GOOGLE-SIGNIN.md). La propia documentación de Firebase señala
+// signInWithPopup() como la alternativa más simple para este caso — la
+// otra opción (que authDomain sea el mismo dominio que sirve la app) no
+// aplica acá porque Cultivarnos se sirve desde GitHub Pages, no desde
+// Firebase Hosting.
 async function iniciarSesionConGoogle() {
   const ctx = await obtenerFirebaseApp();
   if (!ctx) return { ok: false, mensaje: 'No pudimos conectarnos. Probá de nuevo cuando tengas conexión.' };
   try {
     const provider = new ctx.authMod.GoogleAuthProvider();
-    // La documentación de Firebase recomienda redirect en móvil/PWA
-    // instalada (más robusto que un popup en Safari/iOS) y popup en
-    // escritorio (mejor experiencia, no navega afuera).
-    if (esMovilOInstalada()) {
-      await ctx.authMod.signInWithRedirect(ctx.auth, provider);
-      return { ok: true, redirigiendo: true };
-    }
     await ctx.authMod.signInWithPopup(ctx.auth, provider);
     return { ok: true };
   } catch (err) {
