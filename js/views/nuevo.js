@@ -81,6 +81,13 @@ function renderNuevo(root, queryString) {
         <input type="date" id="f-recordatorio-fecha" class="form-input" />
         <div style="height:8px"></div>
         <input type="text" id="f-recordatorio-titulo" class="form-input" placeholder="Ej: Regar, Fertilizar..." />
+        <div style="height:8px"></div>
+        <label class="form-label">Hora <span class="optional">(opcional)</span></label>
+        <input type="time" id="f-recordatorio-hora" class="form-input" />
+        <label class="form-label checkbox-row" id="f-recordatorio-notify-group" style="display:none;">
+          <input type="checkbox" id="f-recordatorio-notify" checked />
+          Notificarme
+        </label>
       </div>
 
       <button type="submit" class="btn-primary">Guardar cultivo</button>
@@ -160,6 +167,9 @@ function renderNuevo(root, queryString) {
     if (recCheck.checked && !root.querySelector('#f-recordatorio-fecha').value) {
       root.querySelector('#f-recordatorio-fecha').value = sumarDiasFecha(todayIsoDate(), 3);
     }
+  });
+  root.querySelector('#f-recordatorio-hora').addEventListener('input', (e) => {
+    root.querySelector('#f-recordatorio-notify-group').style.display = e.target.value ? '' : 'none';
   });
 
   // Foto picker
@@ -261,8 +271,24 @@ function renderNuevo(root, queryString) {
     if (recCheck.checked) {
       const recFecha = root.querySelector('#f-recordatorio-fecha').value;
       const recTitulo = root.querySelector('#f-recordatorio-titulo').value.trim();
+      const recHora = root.querySelector('#f-recordatorio-hora').value || null;
       if (recFecha && recTitulo) {
-        await DB.addRecordatorio({ cultivoId, titulo: recTitulo, fecha: recFecha, estado: 'pendiente' });
+        const recTimezone = recHora ? obtenerTimezoneDispositivo() : null;
+        const recNotify = recHora ? root.querySelector('#f-recordatorio-notify').checked : false;
+        await DB.addRecordatorio({
+          cultivoId,
+          titulo: recTitulo,
+          fecha: recFecha,
+          estado: 'pendiente',
+          hora: recHora,
+          timezone: recTimezone,
+          notify: recNotify,
+          notifyAtUtc: recHora ? calcularNotifyAtUtc(recFecha, recHora, recTimezone) : null,
+          notificationStatus: recNotify ? 'pending' : null,
+        });
+        if (recNotify && window.CultivarnosPush) {
+          await window.CultivarnosPush.ofrecerActivarSiCorresponde();
+        }
       }
     }
 

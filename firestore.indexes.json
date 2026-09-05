@@ -1,0 +1,16 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "recordatorios",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "deleted", "order": "ASCENDING" },
+        { "fieldPath": "estado", "order": "ASCENDING" },
+        { "fieldPath": "notify", "order": "ASCENDING" },
+        { "fieldPath": "notificationStatus", "order": "ASCENDING" },
+        { "fieldPath": "notifyAtUtc", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

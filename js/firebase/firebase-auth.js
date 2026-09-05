@@ -362,6 +362,17 @@ async function enviarRecuperarPassword(email) {
 
 async function cerrarSesion() {
   const ctx = await obtenerFirebaseApp();
+
+  // Desvincular las notificaciones push de ESTE dispositivo de la cuenta
+  // que se está por dejar — antes de perder el uid actual (estado.usuario
+  // se borra un poco más abajo). Caso obligatorio del pedido: "Usuario A
+  // -> logout -> Usuario B" nunca debe recibirle un push a A en este
+  // dispositivo. Best-effort (igual que signOut() acá abajo): si no hay
+  // red en este instante, no bloquea el cierre de sesión.
+  if (window.CultivarnosPush && estado.usuario) {
+    try { await window.CultivarnosPush.desvincularDeCuenta(estado.usuario.uid); } catch (err) { console.warn('[Cultivarnos] no se pudo desvincular notificaciones al cerrar sesión:', err); }
+  }
+
   localStorage.removeItem(CLAVE_UID_ACTIVO);
   // No se toca ninguna base de IndexedDB acá — los datos de esta cuenta
   // quedan cacheados en su base `cultivarnos-{uid}` (por si se vuelve a

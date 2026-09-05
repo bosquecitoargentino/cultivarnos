@@ -171,6 +171,7 @@ async function renderDetalle(id, root) {
             <div class="reminder-sub">${vencido ? 'Venció el ' : ''}${formatFechaCorta(r.fecha)}</div>
           </div>
           <div class="reminder-actions">
+            <button class="pill-btn" data-action="editar" data-id="${r.id}">Editar</button>
             <button class="pill-btn" data-action="posponer" data-id="${r.id}">+3d</button>
           </div>
         </div>`;
@@ -188,9 +189,13 @@ async function renderDetalle(id, root) {
         showToast('Recordatorio completado');
         setTimeout(() => renderDetalle(id, root), 220);
         return;
+      } else if (btn.dataset.action === 'editar') {
+        const rec = pendientes.find((r) => r.id === rid);
+        openRecordatorioModal(id, () => renderDetalle(id, root), rec);
+        return;
       } else {
         const rec = pendientes.find((r) => r.id === rid);
-        await DB.updateRecordatorio(rid, { fecha: sumarDiasFecha(rec.fecha, 3) });
+        await DB.updateRecordatorio(rid, posponerCambios(rec, 3));
         showToast('Pospuesto 3 días');
       }
       renderDetalle(id, root);
@@ -1527,34 +1532,93 @@ function mostrarSugerenciaRecordatorioEnModal(backdrop, sugerencia, cultivoId, o
   });
 }
 
-function openRecordatorioModal(cultivoId, onSaved) {
-  const defaultDate = sumarDiasFecha(todayIsoDate(), 3);
+// cultivoId: a qué cultivo pertenece (nuevo recordatorio). onSaved: se
+// llama después de guardar, para refrescar la pantalla que abrió el
+// modal. recordatorioExistente (opcional): si viene, el modal edita ese
+// recordatorio en vez de crear uno — mismo formulario para los dos casos,
+// nada más cambia el título del modal y qué llama al guardar.
+//
+// Hora + "Notificarme" son NUEVOS acá (push notifications) — a propósito
+// la hora empieza vacía, nunca con un valor inventado: sin hora, el
+// recordatorio existe igual (fecha sola, como siempre), pero no puede
+// generar una notificación (ver calcularNotifyAtUtc en utils.js y
+// docs/firebase-architecture.md, sección Push Notifications). Editar la
+// fecha/hora de un recordatorio ya notificado hace que la próxima
+// sincronización pise el documento entero en Firestore — eso ya alcanza
+// para que el backend lo trate como "todavía no enviado", sin lógica
+// extra acá.
+function openRecordatorioModal(cultivoId, onSaved, recordatorioExistente) {
+  const editando = !!recordatorioExistente;
+  const defaultDate = editando ? recordatorioExistente.fecha : sumarDiasFecha(todayIsoDate(), 3);
+  const defaultHora = editando ? (recordatorioExistente.hora || '') : '';
+  const defaultTitulo = editando ? recordatorioExistente.titulo : '';
+  const defaultNotify = editando ? recordatorioExistente.notify !== false : true;
 
   const { backdrop, close } = createModal(`
     <div class="modal-sheet">
       <div class="modal-close-row"><button id="modal-close" aria-label="Cerrar">✕</button></div>
-      <h2>Nuevo recordatorio</h2>
+      <h2>${editando ? 'Editar recordatorio' : 'Nuevo recordatorio'}</h2>
       <div class="form-group">
         <label class="form-label">Título</label>
-        <input type="text" id="rec-titulo" class="form-input" placeholder="Ej: Regar, Fertilizar, Revisar plagas..." />
+        <input type="text" id="rec-titulo" class="form-input" placeholder="Ej: Regar, Fertilizar, Revisar plagas..." value="${escapeHtml(defaultTitulo)}" />
       </div>
       <div class="form-group">
         <label class="form-label">Fecha</label>
         <input type="date" id="rec-fecha" class="form-input" value="${defaultDate}" />
       </div>
-      <button id="rec-guardar" class="btn-primary">Guardar recordatorio</button>
+      <div class="form-group">
+        <label class="form-label">Hora <span class="optional">(opcional)</span></label>
+        <input type="time" id="rec-hora" class="form-input" value="${defaultHora}" />
+        <p class="form-hint">Sin hora, el recordatorio queda guardado pero no puede avisarte aunque la app esté cerrada.</p>
+      </div>
+      <div class="form-group" id="rec-notify-group" style="${defaultHora ? '' : 'display:none;'}">
+        <label class="form-label checkbox-row">
+          <input type="checkbox" id="rec-notify" ${defaultNotify ? 'checked' : ''} />
+          Notificarme
+        </label>
+      </div>
+      <button id="rec-guardar" class="btn-primary">${editando ? 'Guardar cambios' : 'Guardar recordatorio'}</button>
     </div>
   `);
 
   backdrop.querySelector('#modal-close').addEventListener('click', close);
 
+  const horaInput = backdrop.querySelector('#rec-hora');
+  const notifyGroup = backdrop.querySelector('#rec-notify-group');
+  horaInput.addEventListener('input', () => {
+    notifyGroup.style.display = horaInput.value ? '' : 'none';
+  });
+
   backdrop.querySelector('#rec-guardar').addEventListener('click', async () => {
     const titulo = backdrop.querySelector('#rec-titulo').value.trim();
     const fecha = backdrop.querySelector('#rec-fecha').value;
+    const hora = horaInput.value || null;
+    const notify = hora ? backdrop.querySelector('#rec-notify').checked : false;
     if (!titulo || !fecha) { showToast('Completá título y fecha'); return; }
-    await DB.addRecordatorio({ cultivoId, titulo, fecha, estado: 'pendiente' });
+
+    const timezone = hora ? obtenerTimezoneDispositivo() : null;
+    const notifyAtUtc = hora ? calcularNotifyAtUtc(fecha, hora, timezone) : null;
+    // notificationStatus: campo que administra la Cloud Function
+    // ('processing'/'sent'), pero se reinicia acá a 'pending' en CADA
+    // guardado del cliente — a propósito. El próximo push() del Sync
+    // Engine sube el documento completo (sin merge), así que este reseteo
+    // es lo que garantiza "si edito la hora, no debe llegar la
+    // notificación vieja": el backend ve 'pending' de nuevo y vuelve a
+    // evaluarlo con los datos actuales, nunca con los viejos.
+    const cambios = { titulo, fecha, hora, timezone, notify, notifyAtUtc, notificationStatus: notify ? 'pending' : null };
+
+    if (editando) {
+      await DB.updateRecordatorio(recordatorioExistente.id, cambios);
+    } else {
+      await DB.addRecordatorio({ cultivoId, estado: 'pendiente', ...cambios });
+      // Invitación contextual (solo al crear, solo si de verdad pidió que
+      // le avisen) — nunca insiste si ya la rechazó o ya está resuelta.
+      if (notify && window.CultivarnosPush) {
+        await window.CultivarnosPush.ofrecerActivarSiCorresponde();
+      }
+    }
     close();
-    showToast('Recordatorio agregado');
+    showToast(editando ? 'Recordatorio actualizado' : 'Recordatorio agregado');
     onSaved();
   });
 }

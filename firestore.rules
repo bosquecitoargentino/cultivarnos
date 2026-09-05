@@ -98,6 +98,46 @@ service cloud.firestore {
         }
       }
 
+      // ---------------------------------------------------------------
+      // pushDevices/{deviceId} — un documento por INSTALACIÓN, no por
+      // cuenta: la misma persona puede tener notificaciones activas en
+      // el teléfono, la compu y la tablet a la vez, cada uno con sus
+      // propias preferencias (ver docs/firebase-architecture.md, sección
+      // "Push Notifications"). `deviceId` es el mismo id de instalación
+      // que ya usa el Sync Engine (obtenerDeviceId() en db.js) — nunca se
+      // inventa un segundo identificador.
+      //
+      // Solo el cliente de ESE dispositivo escribe (activar/desactivar/
+      // cambiar preferencias, siempre vía setDoc(...,{merge:true})) —
+      // nunca se borra desde el cliente: "desactivar" es enabled:false,
+      // conservando el documento. El borrado real de un dispositivo solo
+      // lo hace el servidor (Admin SDK, bypassa estas Rules) cuando FCM
+      // confirma que su token ya no sirve — ver functions/lib/fcm.js.
+      // ---------------------------------------------------------------
+      match /pushDevices/{deviceId} {
+        allow get, list: if esDueno(uid);
+        allow create, update: if esDueno(uid) && dispositivoValido();
+        allow delete: if false;
+
+        // request.resource.data es siempre el documento RESULTANTE
+        // completo (incluso en un merge parcial, como el que usan
+        // actualizarPreferencias()/desactivarEnEsteDispositivo() en
+        // firebase-messaging.js) — por eso alcanza con validar el estado
+        // final, sin distinguir "creación" de "actualización parcial".
+        function dispositivoValido() {
+          let d = request.resource.data;
+          return d.installationId is string
+            && d.installationId == deviceId
+            && d.token is string
+            && d.enabled is bool
+            && (!('remindersEnabled' in d) || d.remindersEnabled is bool)
+            && (!('suggestionsEnabled' in d) || d.suggestionsEnabled is bool)
+            && (!('platform' in d) || d.platform is string)
+            && (!('timezone' in d) || d.timezone is string)
+            && d.size() < 15;
+        }
+      }
+
       // configuracion/general — único documento, solo el subconjunto de
       // preferencias con sentido entre dispositivos (ver
       // CAMPOS_CONFIGURACION_SINCRONIZABLES en firebase-sync.js). Las

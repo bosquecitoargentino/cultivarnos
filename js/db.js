@@ -452,9 +452,29 @@ const DB = {
     return result.sort((a, b) => parseLocalDate(a.fecha) - parseLocalDate(b.fecha));
   },
 
+  // Antes esto era un delete simple, sin tombstone — a diferencia de
+  // deleteEventoCompleto/deleteCultivoCompleto/deleteLoteCompleto. No se
+  // notaba porque ninguna pantalla borraba un recordatorio individual
+  // (solo se completan o posponen) — el único borrado real pasaba por
+  // deleteCultivoCompleto, que sí encola el tombstone de cada recordatorio
+  // en cascada. Se corrige acá para que un borrado directo (agregado con
+  // las notificaciones push — ver views/detalle.js) también se propague
+  // bien a Firestore, igual que cualquier otro borrado.
   async deleteRecordatorio(id) {
-    const store = await tx('recordatorios', 'readwrite');
-    return reqToPromise(store.delete(id));
+    const store = await tx('recordatorios');
+    const recordatorio = await reqToPromise(store.get(id));
+    if (!recordatorio) return false;
+
+    const db = await openDB();
+    const t = db.transaction(['recordatorios', 'sincronizacionPendienteEliminar'], 'readwrite');
+    t.objectStore('recordatorios').delete(id);
+    encolarTombstone(t, 'recordatorios', recordatorio);
+
+    return new Promise((resolve, reject) => {
+      t.oncomplete = () => resolve(true);
+      t.onerror = () => reject(t.error);
+      t.onabort = () => reject(t.error || new Error('Eliminación abortada'));
+    });
   },
 
   // ---------- FOTOS ----------

@@ -276,8 +276,10 @@ async function pull(ctx, storeName) {
 async function aplicarTombstoneLocal(storeName, local) {
   const metodo = METODO_BORRADO_LOCAL[storeName];
   await window.DB[metodo](local.id);
-  if (storeName === 'recordatorios') return; // deleteRecordatorio no encola tombstone, nada que cancelar
 
+  // deleteRecordatorio ahora también encola tombstone (ver db.js — antes
+  // era la única excepción acá), así que este cancelado aplica a los 4
+  // stores por igual.
   // El borrado que acabamos de hacer encoló un tombstone NUEVO (db.js no
   // distingue "esto lo borró la persona" de "esto llegó de un pull") —
   // pero el documento remoto YA tiene deleted:true, así que ese

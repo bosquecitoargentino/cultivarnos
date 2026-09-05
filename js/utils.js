@@ -172,6 +172,71 @@ function esParaHoy(fechaIso) {
   return fechaIso <= todayIsoDate();
 }
 
+// ---------------------------------------------------------------------
+// Push notifications — helpers puros de fecha/hora/timezone. Viven acá
+// (no en firebase-messaging.js) porque no dependen de Firebase en
+// absoluto: son matemática de fechas, igual que el resto de este bloque.
+// Ver docs/firebase-architecture.md, sección "Push Notifications".
+// ---------------------------------------------------------------------
+
+// Zona horaria IANA de este dispositivo (ej. 'America/Argentina/Buenos_Aires'),
+// detectada automáticamente — nunca se le pregunta a la persona (punto del
+// pedido: "no inventar una hora oculta", pero tampoco pedirle un dato
+// técnico que el navegador ya sabe con precisión).
+function obtenerTimezoneDispositivo() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch (err) {
+    return 'UTC';
+  }
+}
+
+// Convierte fecha calendario + hora local + timezone IANA al instante UTC
+// exacto en que corresponde notificar (ISO string) — sin librerías
+// externas. El backend (Cloud Function) solo necesita comparar este valor
+// contra "ahora", sin volver a resolver zonas horarias en cada corrida.
+//
+// Truco estándar sin dependencias: se interpreta la hora pedida como si
+// fuera UTC (instante "ingenuo"), se le pregunta a Intl cómo se vería ese
+// mismo instante en la zona pedida y en UTC, y la diferencia entre esas
+// dos lecturas ES el offset real de la zona en esa fecha (contempla
+// horario de verano si corresponde). Como las dos lecturas pasan por el
+// mismo parseo ambiguo de `toLocaleString` + `new Date(string)`, el sesgo
+// que introduce ese parseo se cancela solo en la resta — el resultado es
+// correcto sin importar en qué zona esté corriendo el proceso que llama a
+// esta función (navegador o Cloud Function).
+function calcularNotifyAtUtc(fechaIso, horaHHMM, timeZone) {
+  if (!esFechaCalendario(fechaIso) || !horaHHMM || !timeZone) return null;
+  const [h, min] = horaHHMM.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(min)) return null;
+  const [y, m, d] = fechaIso.split('-').map(Number);
+
+  const ingenuo = Date.UTC(y, m - 1, d, h, min, 0);
+  const enZona = new Date(new Date(ingenuo).toLocaleString('en-US', { timeZone }));
+  const enUtc = new Date(new Date(ingenuo).toLocaleString('en-US', { timeZone: 'UTC' }));
+  const offsetMs = enUtc.getTime() - enZona.getTime();
+
+  return new Date(ingenuo + offsetMs).toISOString();
+}
+
+// Cambios para "posponer N días" un recordatorio (usado desde
+// views/inicio.js y views/detalle.js — misma acción "+3d" en los dos
+// lugares). Si el recordatorio tiene hora (y por lo tanto puede generar
+// push), recalcula notifyAtUtc para la fecha nueva y reinicia
+// notificationStatus a 'pending' — mismo motivo que al editar desde el
+// modal: sin esto, posponer un recordatorio ya enviado no evitaría que
+// seguramente ya haya llegado la notificación vieja, y la nueva fecha
+// nunca dispararía una nueva.
+function posponerCambios(rec, dias) {
+  const fecha = sumarDiasFecha(rec.fecha, dias);
+  if (!rec.hora || !rec.notify) return { fecha };
+  return {
+    fecha,
+    notifyAtUtc: calcularNotifyAtUtc(fecha, rec.hora, rec.timezone || obtenerTimezoneDispositivo()),
+    notificationStatus: 'pending',
+  };
+}
+
 // Comparador reutilizable de eventos: más nuevo primero, por la FECHA REAL
 // del acontecimiento (evento.fecha, 'YYYY-MM-DD') — nunca por createdAt
 // como criterio principal. Ejemplo (punto explícito del pedido de

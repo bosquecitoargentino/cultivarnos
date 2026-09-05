@@ -5,6 +5,7 @@
 async function renderConfiguracion(root) {
   const config = await DB.getConfiguracion();
   const version = await obtenerVersionApp();
+  const notificacionesHtml = await seccionNotificacionesHtml();
 
   root.innerHTML = `
     <div class="view-header view-header-compacto">
@@ -13,6 +14,8 @@ async function renderConfiguracion(root) {
     </div>
 
     ${seccionCuentaHtml()}
+
+    ${notificacionesHtml}
 
     <section>
       <div class="section-title">Hemisferio</div>
@@ -43,6 +46,7 @@ async function renderConfiguracion(root) {
   `;
 
   vincularSeccionCuenta(root);
+  vincularSeccionNotificaciones(root);
 
   const chipGroup = root.querySelector('#config-hemisferio');
   chipGroup.addEventListener('click', async (e) => {
@@ -206,6 +210,110 @@ function vincularSeccionCuenta(root) {
       const resultado = await window.CultivarnosAuth.enviarRecuperarPassword(est.usuario.email);
       showToast((resultado && resultado.mensaje) || (resultado.ok ? 'Listo' : 'No se pudo enviar el correo'));
       btnRestablecer.disabled = false;
+    });
+  }
+}
+
+// ---------------------------------------------------------------------
+// Notificaciones (Push — Firebase Cloud Messaging). Igual que la sección
+// Cuenta, es un snapshot al momento de renderizar (no hay suscripción en
+// vivo acá tampoco). NUNCA pide permiso solo por entrar a esta pantalla —
+// eso pasa recién si la persona toca "Activar notificaciones" (mismo
+// principio del pedido: nunca pedir permiso automáticamente).
+//
+// Estados de Notification.permission:
+//  - 'unsupported' (navegador sin soporte): la sección no se muestra en
+//    absoluto — la app sigue funcionando normalmente, sin nada raro que
+//    explicar acá.
+//  - 'denied': no hay nada para ofrecer (el navegador no deja volver a
+//    preguntar por JS) — se explica en una sola línea, sin insistir.
+//  - 'default'/'granted' sin dispositivo activo todavía: botón "Activar
+//    notificaciones".
+//  - 'granted' con dispositivo activo: dos preferencias independientes
+//    (Recordatorios / Sugerencias de cultivo) + "Desactivar
+//    notificaciones en este dispositivo".
+// ---------------------------------------------------------------------
+
+async function seccionNotificacionesHtml() {
+  if (!window.CultivarnosPush) return '';
+  const estado = window.CultivarnosPush.estadoPermiso();
+  if (estado === 'unsupported') return '';
+
+  if (estado === 'denied') {
+    return `
+      <section>
+        <div class="section-title">Notificaciones</div>
+        <p class="config-nota">Notificaciones bloqueadas en este dispositivo. Para activarlas, hay que habilitarlas desde los permisos del navegador o del teléfono.</p>
+      </section>
+    `;
+  }
+
+  const dispositivo = estado === 'granted' ? await window.CultivarnosPush.obtenerEstadoDispositivo() : null;
+  const activo = !!(dispositivo && dispositivo.enabled);
+
+  if (!activo) {
+    return `
+      <section>
+        <div class="section-title">Notificaciones</div>
+        <p class="config-nota">Notificaciones desactivadas</p>
+        <button type="button" id="push-btn-activar" class="btn-secondary">Activar notificaciones</button>
+      </section>
+    `;
+  }
+
+  const remindersOn = dispositivo.remindersEnabled !== false;
+  const suggestionsOn = dispositivo.suggestionsEnabled !== false;
+  return `
+    <section>
+      <div class="section-title">Notificaciones</div>
+      <p class="config-nota">Notificaciones del dispositivo: Activadas</p>
+      <label class="form-label checkbox-row">
+        <input type="checkbox" id="push-check-recordatorios" ${remindersOn ? 'checked' : ''} />
+        Recordatorios
+      </label>
+      <label class="form-label checkbox-row">
+        <input type="checkbox" id="push-check-sugerencias" ${suggestionsOn ? 'checked' : ''} />
+        Sugerencias de cultivo
+      </label>
+      <button type="button" id="push-btn-desactivar" class="btn-secondary" style="margin-top:10px;">Desactivar notificaciones</button>
+    </section>
+  `;
+}
+
+function vincularSeccionNotificaciones(root) {
+  const btnActivar = root.querySelector('#push-btn-activar');
+  if (btnActivar) {
+    btnActivar.addEventListener('click', async () => {
+      btnActivar.disabled = true;
+      const resultado = await window.CultivarnosPush.activar();
+      showToast(resultado.mensaje);
+      renderConfiguracion(root);
+    });
+  }
+
+  const btnDesactivar = root.querySelector('#push-btn-desactivar');
+  if (btnDesactivar) {
+    btnDesactivar.addEventListener('click', async () => {
+      btnDesactivar.disabled = true;
+      const resultado = await window.CultivarnosPush.desactivarEnEsteDispositivo();
+      showToast(resultado.mensaje || 'Notificaciones desactivadas');
+      renderConfiguracion(root);
+    });
+  }
+
+  const checkRecordatorios = root.querySelector('#push-check-recordatorios');
+  if (checkRecordatorios) {
+    checkRecordatorios.addEventListener('change', async () => {
+      await window.CultivarnosPush.actualizarPreferencias({ remindersEnabled: checkRecordatorios.checked });
+      showToast('Guardado');
+    });
+  }
+
+  const checkSugerencias = root.querySelector('#push-check-sugerencias');
+  if (checkSugerencias) {
+    checkSugerencias.addEventListener('change', async () => {
+      await window.CultivarnosPush.actualizarPreferencias({ suggestionsEnabled: checkSugerencias.checked });
+      showToast('Guardado');
     });
   }
 }

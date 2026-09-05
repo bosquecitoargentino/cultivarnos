@@ -1,0 +1,15 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "predeploy": [
+        "bash -c \"mkdir -p '$RESOURCE_DIR/motor' && cp js/motor-observacion.js js/motor-biblioteca.js js/data/cultivos-data.js js/data/biblioteca-especies.js js/data/preguntas-cultivos.js '$RESOURCE_DIR/motor/'\""
+      ]
+    }
+  ]
+}

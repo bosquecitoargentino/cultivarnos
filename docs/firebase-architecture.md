@@ -49,6 +49,10 @@ directamente.
   la barra superior (un punto, no un banner).
 - **Mensajes de error en español**, traducidos desde los códigos de
   Firebase.
+- **Notificaciones push** (Firebase Cloud Messaging, Web/PWA): recordatorios
+  a su hora exacta y sugerencias contextuales opcionales, multi-dispositivo,
+  con activación explícita (nunca automática). Ver sección 12 para el
+  detalle completo.
 
 ## 2. No implementado todavía (fuera de alcance de esta beta, a propósito)
 
@@ -61,12 +65,15 @@ así, no es una omisión:
   pensado (`localId`/`remoteUrl`/`storagePath`/`syncStatus`) pero no
   implementado: las fotos siguen siendo 100% locales, incluida la copia
   que se hace al vincular una huerta pre-existente (ver sección 6).
-- Cloud Functions (no se usó ninguna; toda la lógica corre en el
-  cliente).
 - App Check — **pendiente de evaluar antes de un lanzamiento público**
   (ver sección 10, es el ítem de seguridad más importante que falta).
 - Eliminar cuenta (borrado de la cuenta de Auth + sus datos).
-- Notificaciones push.
+- Notificaciones por SMS, WhatsApp o email; topics; badges complejos;
+  snooze; acciones dentro de la notificación; repetición
+  recurrente (diaria/semanal) de recordatorios; IA; analítica de
+  engagement sobre las notificaciones (ver sección 12 — son las dos
+  únicas Cloud Functions del proyecto, y son deliberadamente chicas:
+  nada de esto se construyó).
 - Planes pagos / facturación.
 - Funciones de comunidad o de compartir datos entre cuentas.
 - Analítica invasiva — no se agregó ningún SDK de analytics/tracking.
@@ -316,6 +323,33 @@ No es un estado corrupto ni requiere limpieza manual.
    Firestore. No debería ser un problema real de costo/abuso a la escala
    de una beta, pero vale la pena que quede evaluado explícitamente antes
    de escalar.
+9. **Las dos Cloud Functions corren con credenciales de administrador
+   (Admin SDK) y por lo tanto bypassan por completo `firestore.rules`.**
+   Es el comportamiento esperado y necesario (mandar un push tiene que
+   poder leer/actualizar cualquier cuenta, no solo la propia), pero
+   significa que toda la superficie de confianza de esas dos funciones
+   son ellas mismas — no hay una segunda capa de Security Rules
+   protegiendo lo que hacen puertas adentro. Vale la pena que el auditor
+   revise `functions/lib/*.js` con ese criterio (qué leen, qué escriben,
+   qué validan del estado que leen antes de actuar).
+10. **El motor de sugerencias corre server-side vía Node `vm`**
+    (`functions/lib/motorLoader.js`), ejecutando sin cambios los mismos
+    archivos que corren en el navegador (ver sección 12.6 para el
+    razonamiento completo de esta decisión). `vm` de Node NO es un
+    sandbox de seguridad fuerte (a diferencia de, por ejemplo, una VM
+    aislada de verdad) — es apropiado acá porque el código ejecutado es
+    el propio código fuente del repo (`js/motor-observacion.js` y
+    compañía, nunca contenido de terceros ni input de usuarios), pero
+    vale la pena que el auditor lo confirme explícitamente como
+    asunción: si algún día ese motor empezara a incorporar contenido no
+    controlado por el propio equipo, este mecanismo dejaría de ser
+    apropiado.
+11. **Sin tope de costo/alertas de facturación configurado.** El proyecto
+    pasa a plan Blaze (pago por uso) para poder desplegar las Cloud
+    Functions (ver sección 12.9) — no se configuró ningún presupuesto ni
+    alerta de facturación en Google Cloud como parte de esta integración;
+    queda como paso de configuración manual recomendado antes de un
+    lanzamiento con más usuarios (ver sección 12.9).
 
 ## 9. Cómo se verificó (y qué falta verificar)
 
@@ -387,15 +421,434 @@ No es un estado corrupto ni requiere limpieza manual.
   `borrarPendienteEliminar`) y los hooks de tombstone agregados en
   `deleteEventoCompleto`/`deleteCultivoCompleto`/`deleteLoteCompleto`.
 - `js/views/configuracion.js` — sección "Cuenta" (`seccionCuentaHtml`,
-  `vincularSeccionCuenta`).
+  `vincularSeccionCuenta`) y, agregada en la integración de push, la
+  sección "Notificaciones" (`seccionNotificacionesHtml`,
+  `vincularSeccionNotificaciones`).
 - `index.html` — wiring de los 3 script tags de módulos, clase
-  `sin-sesion` en `<body>`, indicador de sync en la topbar.
+  `sin-sesion` en `<body>`, indicador de sync en la topbar, y el script
+  tag de `firebase-messaging.js`.
+
+**Cliente — notificaciones push (agregado en la integración de push):**
+
+- `js/firebase/firebase-messaging.js` — todo el cliente de FCM: permisos,
+  registro/baja de dispositivo, preferencias, invitación contextual,
+  recepción en primer plano.
+- `sw.js` — integración de Firebase Messaging DENTRO del Service Worker
+  existente (nunca uno nuevo): recepción en segundo plano y click en la
+  notificación. Ver diff completo — el resto del archivo (cache/offline/
+  update) no cambió de comportamiento, solo de versión (`APP_VERSION`).
+- `js/utils.js` — `obtenerTimezoneDispositivo`, `calcularNotifyAtUtc`,
+  `posponerCambios`.
+- `js/db.js` — fix de `deleteRecordatorio` (ahora encola tombstone, igual
+  que el resto de los `deleteXCompleto`).
+- `js/firebase/firebase-sync.js` — se sacó el caso especial que saltaba
+  el tombstone de `recordatorios` (ya no hace falta, ver fix anterior).
+- `js/firebase/firebase-auth.js` — `cerrarSesion()` ahora desvincula el
+  dispositivo de la cuenta que cierra sesión (ver sección 12.10).
+- `js/views/detalle.js`, `js/views/inicio.js`, `js/views/nuevo.js` — Hora
+  + "Notificarme" en los tres puntos donde se crea/edita un recordatorio,
+  botón "Editar", posponer recalcula `notifyAtUtc`.
 
 **Backend/reglas:**
 
 - `firestore.rules` — Security Rules completas, deny-by-default,
-  comentadas con la intención de cada regla.
+  comentadas con la intención de cada regla (incluye el bloque nuevo de
+  `pushDevices`, agregado en la integración de push).
+- `firestore.indexes.json` — índices compuestos versionados (agregado en
+  la integración de push).
+- `functions/index.js` — las dos únicas Cloud Functions del proyecto
+  (agregado en la integración de push).
+- `functions/lib/recordatorios.js` — scheduler de recordatorios: query,
+  claim idempotente, ventana de gracia, envío, reintentos (agregado en la
+  integración de push).
+- `functions/lib/sugerencias.js` — scheduler de sugerencias: ventana
+  horaria, tope de una por día, anti-repetición, selección de candidata
+  (agregado en la integración de push).
+- `functions/lib/motorLoader.js` — carga el motor de sugerencias real
+  (sin duplicar lógica) vía Node `vm` (agregado en la integración de
+  push — ver sección 12.6, y el riesgo 10 de la sección 8).
+- `functions/lib/fechas-compat.js` — el único subconjunto de `utils.js`
+  duplicado a mano, documentado como tal (agregado en la integración de
+  push).
+- `functions/lib/fcm.js` — envío FCM y limpieza de dispositivos con token
+  inválido (agregado en la integración de push).
+- `firebase.json` — hook de `predeploy` que copia el motor real hacia
+  `functions/motor/` en cada deploy (agregado en la integración de
+  push).
 
 **Este documento y el plan original:**
 
 - `docs/firebase-architecture.md` (este archivo).
+
+## 12. Push Notifications
+
+Integración de Firebase Cloud Messaging (FCM) para Web/PWA sobre la
+infraestructura descripta arriba. Dos tipos de notificación, cada uno con
+su propia lógica de disparo y su propia razón de ser: **recordatorios**
+(la persona pidió explícitamente que le avisen a una hora exacta) y
+**sugerencias contextuales** (el motor agronómico real, ya existente,
+detecta algo genuinamente pertinente). Principio rector, citado tal cual
+se lo pidió quien encargó esta integración: *"Cultivarnos puede recordar
+y sugerir, pero no perseguir"* — nunca marketing, nunca "volvé a
+Cultivarnos", nunca urgencia inventada a partir de la ausencia de datos.
+
+### 12.1 Modelo de datos: dispositivos, no cuentas
+
+```
+users/{uid}/pushDevices/{deviceId}
+  { installationId, token, enabled,
+    remindersEnabled, suggestionsEnabled,
+    platform, timezone,
+    createdAt, updatedAt, lastSeenAt }
+
+users/{uid}/pushState/sugerencias      // anti-repetición + tope 1/día (solo lo escribe el servidor)
+  { ultimoEnvioFecha, historial[], updatedAt }
+```
+
+Un documento por **instalación**, nunca uno por cuenta: la misma persona
+puede tener el teléfono, la compu y una tablet con notificaciones activas
+a la vez, cada una con sus propias dos preferencias independientes
+(Recordatorios / Sugerencias). `deviceId` es el mismo id de instalación
+que ya usaba el Sync Engine (`obtenerDeviceId()` en `db.js`) — no se
+inventó un segundo identificador.
+
+`pushState/sugerencias` no tiene bloque propio en `firestore.rules` a
+propósito: cae bajo la regla catch-all `match /{coleccion}/{docId}`
+existente dentro de `users/{uid}` (que solo permite
+`cultivos`/`eventos`/`recordatorios`/`lotesPropagacion`), así que queda
+denegado por default para el cliente — solo lo toca el servidor (Admin
+SDK, que bypassa Security Rules). Es intencional: esa memoria de
+anti-repetición es un detalle de implementación del servidor, no algo
+que el cliente necesite leer ni escribir nunca.
+
+### 12.2 Permisos: activación siempre explícita, nunca automática
+
+La app **nunca** pide permiso de notificaciones al arrancar. Los únicos
+dos disparadores son: (a) un botón "Activar notificaciones" en
+Configuración → Notificaciones, y (b) una invitación contextual, una
+sola vez, al crear el PRIMER recordatorio con "Notificarme" tildado
+("¿Querés que Cultivarnos te avise aunque la aplicación esté cerrada?"
+[Activar] / [Ahora no]) — si se elige "Ahora no", no se vuelve a insistir
+(se guarda en `localStorage`, es una preferencia puramente local del
+dispositivo, no de la cuenta).
+
+Los cuatro estados de permiso del navegador (`default`/`granted`/
+`denied`/`unsupported`) tienen su propia UI en Configuración
+(`seccionNotificacionesHtml`/`vincularSeccionNotificaciones` en
+`js/views/configuracion.js`):
+- **`unsupported`** (navegador o contexto sin soporte, ej. Safari en iOS
+  no instalado a pantalla de inicio): la sección de notificaciones no se
+  muestra — el resto de la app funciona exactamente igual.
+- **`default`**: botón "Activar notificaciones".
+- **`denied`**: mensaje explicando que están bloqueadas a nivel
+  navegador/sistema, sin un botón que no podría hacer nada (pedir permiso
+  de nuevo desde código cuando ya está `denied` no reabre el diálogo en
+  ningún navegador).
+- **`granted`**: las dos preferencias (Recordatorios / Sugerencias de
+  cultivo) como checkboxes independientes, más "Desactivar notificaciones
+  en este dispositivo".
+
+### 12.3 Compatibilidad iOS/PWA
+
+Push Web en iOS **solo funciona con la app instalada a pantalla de
+inicio** (no en una pestaña normal de Safari) — `soportado()` en
+`firebase-messaging.js` lo detecta (`Notification`/`serviceWorker`/
+`PushManager` disponibles, más el caso particular de Safari) y degrada a
+`unsupported` sin romper nada más. No se asumió que el comportamiento de
+una pestaña de Safari es igual al de la PWA instalada.
+
+### 12.4 Recordatorios: hora exacta, timezone, y por qué nunca se manda tarde ni doble
+
+Un recordatorio hoy tiene `fecha` (ya existía) y, agregado en esta
+integración, `hora` (`HH:MM`, opcional — sin hora, el recordatorio sigue
+existiendo y viéndose en la app, pero nunca genera un push: no se
+inventa ninguna hora oculta). Con fecha+hora+"Notificarme" tildado, el
+cliente calcula y guarda:
+
+- `timezone`: la zona IANA del dispositivo (`Intl.DateTimeFormat().resolvedOptions().timeZone`).
+- `notifyAtUtc`: fecha+hora convertida a UTC, calculada con
+  `calcularNotifyAtUtc()` (`js/utils.js`) — un truco sin dependencias
+  nuevas: formatear el mismo instante "ingenuo" con `toLocaleString` una
+  vez en la zona del dispositivo y otra vez en UTC, y restar la
+  diferencia, de forma que el sesgo de parseo (ambiguo en ambos casos) se
+  cancela. Se guarda en formato ISO string.
+- `notificationStatus: 'pending'`.
+
+Importante: esto nunca se confunde con `createdAt`/`updatedAt` (que
+siguen siendo, como siempre en esta app, timestamps reales del
+dispositivo usados solo para conflictos de sync) — `notifyAtUtc` es la
+hora agronómica elegida por la persona, exactamente el mismo principio
+de separación que ya regía `fecha` vs. `createdAt`/`updatedAt` (sección 4
+de este documento) antes de esta integración.
+
+**Scheduler único, cada 1 minuto** (`functions/index.js` →
+`procesarRecordatoriosPendientes` en `functions/lib/recordatorios.js`):
+una `collectionGroup('recordatorios')` con `deleted==false`,
+`estado=='pendiente'`, `notify==true`, `notificationStatus=='pending'`,
+`notifyAtUtc<=ahora`, `orderBy(notifyAtUtc)`, tope 200 por corrida —
+nunca un scheduler por recordatorio.
+
+**Idempotencia** — nunca "leer → mandar → marcar" (una corrida se podría
+solapar con la siguiente, o reintentar): cada recordatorio elegible pasa
+primero por una `runTransaction` que relee el documento y solo avanza si
+**todavía** corresponde (`notificationStatus` sigue siendo `'pending'`,
+no está borrado/completado/con `notify` apagado, no está fuera de la
+ventana de gracia) y en la misma transacción lo marca `'processing'`
+— recién ahí, fuera de la transacción, se manda el push y se marca
+`'sent'`. Una segunda corrida que agarre el mismo documento encuentra
+`'processing'` (o ya `'sent'`) y no hace nada.
+
+**Editar/completar/borrar antes de que llegue la hora, garantizado sin
+lógica extra**: el Sync Engine ya escribe cada cambio con un `setDoc()`
+de reemplazo completo (no un merge parcial) en cada push del cliente
+(`js/firebase/firebase-sync.js`). Aprovechando eso, el cliente siempre
+(re)escribe `notificationStatus: 'pending'` en IndexedDB cada vez que se
+crea/edita/pospone un recordatorio con `notify:true` — así, si el
+servidor ya lo había marcado `'processing'`/`'sent'` para la hora vieja,
+el próximo push del cliente (con la hora nueva, o con `notify:false`, o
+como tombstone si se borró) lo pisa por completo sin que el servidor
+tenga que hacer nada especial. La transacción del servidor, además,
+siempre relee el estado ACTUAL antes de actuar — nunca actúa sobre una
+copia vieja en memoria.
+
+**Ventana de gracia**: un recordatorio vencido hace más de 24 horas ya no
+genera push (se marca `'skipped_stale'`) — evita que alguien que no abrió
+la app en varios días reciba, al reconectarse, una ráfaga de
+notificaciones atrasadas. El recordatorio en sí sigue existiendo y
+viéndose normal en la app; esto solo decide si vale la pena interrumpir
+con un push. Regla simple a propósito, no una cola de prioridades.
+
+**Reintentos**: solo ante una falla transitoria de envío (no token
+inválido, que se limpia aparte, ver 12.8) — hasta 5 intentos
+(`TOPE_INTENTOS`), después se marca `'failed'` y no se vuelve a
+reintentar indefinidamente.
+
+**Recordatorios creados/editados offline**: no hay ninguna cola paralela
+— el servidor solo ve lo que ya sincronizó normalmente vía el Sync Engine
+existente. Nada que pueda quedar desactualizado por separado.
+
+**Multi-dispositivo**: se manda a todos los dispositivos de la cuenta con
+`enabled==true && remindersEnabled==true` — cada dispositivo decide su
+propia preferencia de forma independiente de la de Sugerencias.
+
+### 12.5 Recordatorios y sugerencias, exentos de reglas distintas
+
+Los recordatorios se mandan a la hora exacta pedida, **sin** ninguna
+ventana horaria — es la única excepción explícita a la ventana 09-19 de
+la sección siguiente. Si un recordatorio y una sugerencia coincidieran
+para la misma persona, el recordatorio nunca se retrasa ni se reemplaza
+por la sugerencia (son corridas y datos completamente independientes:
+no hay ningún punto donde compitan por el mismo slot de envío).
+
+### 12.6 Sugerencias contextuales: el motor real, sin duplicar lógica agronómica
+
+Decisión de arquitectura explícitamente pedida a documentar (había dos
+caminos posibles: sincronizar una "candidata" precalculada a Firestore
+para que el servidor solo la valide, o compartir el motor real entre
+cliente y servidor). **Se eligió la segunda** — menos duplicación, cero
+riesgo de que la versión "candidata" quede desactualizada respecto de lo
+que el motor real decidiría en ese momento:
+
+- `firebase.json` define un hook `predeploy` que, en cada
+  `firebase deploy`, copia los archivos fuente reales
+  (`js/motor-observacion.js`, `js/motor-biblioteca.js`,
+  `js/data/cultivos-data.js`, `js/data/biblioteca-especies.js`,
+  `js/data/preguntas-cultivos.js`) hacia `functions/motor/` — nunca se
+  editan a mano ni se commitean ahí, siempre se regeneran desde la fuente
+  real.
+- `functions/lib/motorLoader.js` los ejecuta, TAL CUAL, con el módulo
+  `vm` de Node, simulando el global scope de un `<script>` clásico de
+  navegador (`sandbox.window = sandbox`, así los `function`/`var` de
+  nivel superior de esos archivos se adjuntan solos, igual que en un
+  navegador real) — cero reescritura de lógica agronómica en el backend.
+- El único subconjunto SÍ duplicado a mano es `functions/lib/
+  fechas-compat.js` (~30 líneas puras de `utils.js`: conversión fecha
+  calendario ↔ `Date` en hora local, y `compararEventosPorFecha`) —
+  necesario porque `utils.js` mezcla esas funciones con DOM (modales,
+  drag&drop) que no tiene sentido llevar a una Cloud Function. Es la
+  única duplicación real de todo este mecanismo, documentada como tal en
+  el propio archivo, con una nota para mantenerla sincronizada a mano si
+  `utils.js` cambia esas funciones.
+
+`functions/lib/sugerencias.js` orquesta (nunca decide agronomía): agrupa
+`pushDevices` habilitados para sugerencias por cuenta, filtra a los
+dispositivos que ahora mismo están en su ventana horaria LOCAL (09:00–
+19:00, calculada con `Intl.DateTimeFormat` sobre el `timezone` de cada
+dispositivo — nunca la hora del servidor), chequea el tope de una por día
+por cuenta (`pushState/sugerencias.ultimoEnvioFecha`), corre el motor
+real sobre los cultivos/eventos actuales de la cuenta, descarta cualquier
+candidata ya mostrada/oculta/resuelta reciente (`historial`, últimas 8,
+por `cultivoId+idPregunta`), y si hay más de una candidata igualmente
+relevante elige entre ellas con el mismo orden de prioridad que ya usa
+Inicio en el cliente (`ORDEN_ORIGEN`). **Si no hay nada realmente
+pertinente, no se manda nada** — nunca se fabrica contenido solo para
+tener algo que mandar.
+
+El tono lo define enteramente el motor real reutilizado (nunca se generó
+texto nuevo en el backend): observar → comprender → decidir, sugerente
+("Podrías revisar si...") nunca imperativo.
+
+### 12.7 Contenido de la notificación
+
+Siempre corto: título "Cultivarnos" + una línea de cuerpo (el título del
+recordatorio, o la pregunta/observación de la sugerencia) — nunca notas
+largas ni datos sensibles. Ícono: el ícono PWA ya aprobado
+(`icons/icon-192.png`), nunca un emoji como ícono del sistema
+(`functions/lib/fcm.js`).
+
+### 12.8 Service Worker: mismo scope, nunca uno nuevo
+
+Firebase Messaging se integró DENTRO del Service Worker existente
+(`sw.js`) — nunca un `firebase-messaging-sw.js` aparte, porque dos
+Service Workers no pueden coexistir en el mismo scope. Se usó
+específicamente el SDK **compat** (`importScripts()` de
+`firebase-app-compat.js` + `firebase-messaging-compat.js`) solo dentro de
+`sw.js`, porque `import()`/ESM no es utilizable vía `importScripts()` en
+un Service Worker clásico — es la forma vigente/recomendada de hacer esto
+específicamente en este contexto (el cliente sí usa el SDK modular
+normal, vía `import()` dinámico). Toda la integración está en bloques
+`try/catch` aditivos: si Firebase Messaging fallara al cargar dentro del
+Service Worker, el cache/offline/install/update que ya existía sigue
+funcionando exactamente igual.
+
+- **Background** (app cerrada): `onBackgroundMessage()` →
+  `self.registration.showNotification()`.
+- **Foreground** (app abierta): `onMessage()` en el cliente muestra un
+  `showToast()` interno — nunca a la vez un toast Y una notificación de
+  sistema (se evitó la redundancia a propósito).
+- **Click**: cierra la notificación, resuelve una ruta de destino según
+  `data.tipo`/`data.cultivoId` (una sugerencia o un recordatorio ligado a
+  un cultivo abre la ficha de ese cultivo; un recordatorio sin cultivo
+  abre Inicio/Recordatorios, igual que la navegación normal de la app), y
+  prioriza enfocar una ventana ya abierta (`clients.matchAll` +
+  `client.navigate()`) antes que abrir una instancia nueva
+  (`clients.openWindow` solo como fallback).
+
+### 12.9 Seguridad y aislamiento
+
+- **El envío de FCM ocurre exclusivamente en el servidor** — Cloud
+  Functions con Admin SDK (`functions/lib/fcm.js`). El cliente nunca
+  tiene ni necesita ninguna credencial de administrador; el `apiKey`
+  público del frontend no puede mandar notificaciones a nadie.
+- **Aislamiento por cuenta**, reforzado con el bloque nuevo de
+  `firestore.rules` para `pushDevices/{deviceId}` (dentro de
+  `users/{uid}`): solo el dueño de la cuenta puede leer/crear/actualizar
+  sus propios dispositivos; `delete` siempre `false` desde el cliente (la
+  baja real de un dispositivo solo la hace el servidor, ver abajo).
+- **Cambio de cuenta en el mismo dispositivo** (Usuario A cierra sesión,
+  Usuario B inicia sesión): `cerrarSesion()` (`firebase-auth.js`) llama,
+  antes de limpiar la sesión local, a
+  `CultivarnosPush.desvincularDeCuenta(uidAnterior)` — que marca
+  `enabled:false` en el documento de ESTE dispositivo dentro de
+  `users/{uidAnterior}/pushDevices/`, nunca toca dispositivos de otras
+  instalaciones. Usuario B, al loguearse, no hereda ningún estado de
+  push de A (cada cuenta tiene su propia subcolección `pushDevices`); si
+  activa notificaciones, se crea/reactiva el documento de este mismo
+  `deviceId` bajo `users/{uidNuevo}/`.
+- **Token permanentemente inválido** (FCM confirma
+  `registration-token-not-registered`/`invalid-registration-token`/
+  `invalid-argument`): se borra SOLO ese documento de dispositivo
+  (`limpiarDispositivoInvalido` en `functions/lib/fcm.js`) — nunca se
+  reintenta indefinidamente, nunca se toca otro dispositivo de la cuenta.
+- **"Desactivar notificaciones en este dispositivo"**: `setDoc(...,
+  {enabled:false}, {merge:true})` sobre el documento de ESTE `deviceId` —
+  nunca borra el documento, nunca afecta otros dispositivos, no toca
+  ningún dato de recordatorios/cultivos/eventos.
+- **Protecciones básicas contra abuso**: tope de 200 recordatorios
+  procesados por corrida, tope de 5 reintentos por recordatorio, tope de
+  1 sugerencia por cuenta por día, tope de 8 entradas de historial
+  anti-repetición — deliberadamente simples (no un sistema de rate
+  limiting sofisticado), suficientes para el volumen esperado de esta
+  beta.
+
+### 12.10 Configuración manual necesaria (Firebase Console)
+
+1. **Generar la clave VAPID**: Firebase Console → Configuración del
+   proyecto → Cloud Messaging → pestaña "Web Push certificates" → "Generate
+   key pair". Pegar el valor resultante en `VAPID_KEY` dentro de
+   `js/firebase/firebase-messaging.js` (hoy tiene un placeholder,
+   `'PEGAR_VAPID_KEY_ACA'` — sin esto, `activar()` devuelve un error claro
+   en vez de fallar en silencio).
+2. **Pasar el proyecto a plan Blaze** (pago por uso) — Cloud Functions v2
+   y Cloud Scheduler (que `onSchedule` crea automáticamente) lo requieren.
+   Ver el desglose de qué factura y cuánto más abajo.
+3. **Desplegar**: `firebase deploy --only functions,firestore:rules,firestore:indexes`
+   desde una máquina con `firebase login` ya hecho (este entorno de
+   desarrollo en la nube no tiene forma de completar el login interactivo
+   de Google en nombre de la cuenta del usuario — ese paso lo tiene que
+   hacer la persona misma, una vez, desde su computadora).
+
+**Qué requiere Blaze y qué factura, específicamente:**
+
+- **Cloud Functions v2** (`procesarRecordatorios`, cada 1 minuto —
+  43.200 invocaciones/mes; `procesarSugerencias`, cada 30 minutos — 1.440
+  invocaciones/mes) y el **Cloud Scheduler** que las dispara. Ambos
+  dentro del nivel gratuito de Cloud Functions (2M invocaciones/mes) para
+  cualquier volumen de usuarios remotamente cercano al de esta beta — el
+  costo real esperado es prácticamente $0/mes, pero el plan Blaze en sí
+  (aunque no se supere el nivel gratuito) es un requisito de
+  habilitación de Google Cloud para poder desplegar Functions v2 y
+  Scheduler, no una elección de esta integración.
+- **Firestore**: las lecturas que hace cada corrida (`collectionGroup`
+  sobre `recordatorios`/`pushDevices`, más las lecturas de
+  cultivos/eventos/configuración de `sugerencias.js`) se suman a las
+  lecturas normales que ya hacía el Sync Engine — escala con la cantidad
+  de cuentas activas y recordatorios pendientes, no debería ser
+  significativo a la escala actual, pero es el ítem a vigilar si la base
+  de usuarios crece mucho (ver también el ítem de "cuotas/límites" de la
+  sección 10).
+- **Firebase Cloud Messaging en sí es gratis** — no tiene costo por
+  mensaje enviado.
+- No se configuró ningún presupuesto/alerta de facturación en Google
+  Cloud como parte de esta integración (ver riesgo 11 de la sección 8) —
+  recomendado como paso manual antes de escalar.
+
+### 12.11 Checklist mínima de validación
+
+Lo que se pudo verificar desde este entorno de desarrollo (sin salida de
+red hacia Firebase, mismo motivo que la sección 9): la app arranca y
+sigue funcionando offline con `firebase-messaging.js` cargado y sin
+permiso otorgado; la sección de Configuración se comporta bien en los
+cuatro estados de permiso simulados vía el mismo seam de pruebas
+(`__esStubDePrueba`) que ya usaban `firebase-auth.js`/`firebase-sync.js`;
+los tres puntos de creación/edición de recordatorio calculan
+`notifyAtUtc` correctamente para varias combinaciones de zona horaria; el
+Service Worker sigue instalando/cacheando/actualizando igual que antes
+(`APP_VERSION` bumpeada, resto del comportamiento sin cambios).
+
+Lo que **falta**, y requiere el proyecto Firebase real en Blaze más un
+dispositivo físico (no se puede simular desde acá):
+
+1. Generar la clave VAPID real y confirmar que `activar()` obtiene un
+   token válido.
+2. Recibir un push real con la app en primer plano (toast, sin
+   notificación de sistema duplicada).
+3. Recibir un push real con la app **cerrada** (Service Worker en
+   segundo plano) — en Android/Chrome y, en particular, en **iPhone con
+   la PWA instalada a pantalla de inicio** (el caso que más importa
+   validar de verdad, según lo pedido).
+4. Click en la notificación: confirmar que abre/enfoca la ficha del
+   cultivo correcto (o Inicio, si el recordatorio no tiene cultivo).
+5. Editar la hora de un recordatorio ya "tomado" por el scheduler y
+   confirmar que NUNCA llega el push con la hora vieja.
+6. Completar o borrar un recordatorio antes de su hora y confirmar que no
+   llega ningún push.
+7. Dos dispositivos de la misma cuenta con preferencias distintas
+   (uno con Recordatorios apagado, otro con Sugerencias apagado) y
+   confirmar que cada uno respeta solo la suya.
+8. Cerrar sesión (Usuario A) e iniciar sesión con Usuario B en el mismo
+   dispositivo/navegador, y confirmar que B nunca recibe un push
+   destinado a A.
+9. "Desactivar notificaciones en este dispositivo" y confirmar que ese
+   dispositivo deja de recibir pushes sin afectar otros dispositivos de
+   la cuenta ni ningún dato de recordatorios.
+10. Confirmar que una sugerencia contextual real solo llega cuando el
+    motor la considera genuinamente pertinente (no forzar una sugerencia
+    artificial) y respeta la ventana 09-19 y el tope de 1/día.
+11. Confirmar offline/PWA (instalación, cache, funcionamiento sin red) sin
+    ninguna regresión respecto del comportamiento previo a esta
+    integración.
+12. Verificar en Firebase Console, tras un rato de uso real, que un token
+    deliberadamente inválido (ej. desinstalando la PWA de un dispositivo
+    de prueba) efectivamente limpia solo ese dispositivo sin loops de
+    reintento.

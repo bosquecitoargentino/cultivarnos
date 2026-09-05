@@ -113,9 +113,12 @@ async function renderInicio(root) {
         await DB.updateRecordatorio(id, { estado: 'completado' });
         showToast('Recordatorio completado');
         setTimeout(() => renderInicio(root), 220);
+      } else if (btn.dataset.action === 'editar') {
+        const rec = recordatorios.find((r) => r.id === id);
+        openRecordatorioModal(rec.cultivoId, () => renderInicio(root), rec);
       } else if (btn.dataset.action === 'posponer') {
         const rec = recordatorios.find((r) => r.id === id);
-        await DB.updateRecordatorio(id, { fecha: sumarDiasFecha(rec.fecha, 3) });
+        await DB.updateRecordatorio(id, posponerCambios(rec, 3));
         showToast('Recordatorio pospuesto 3 días');
         renderInicio(root);
       }
@@ -191,6 +194,7 @@ function htmlBloqueRecordatorios(recordatorios, cultivos) {
           <div class="reminder-sub">${cultivo ? escapeHtml(cultivo.especie) + ' · ' : ''}${vencido ? 'Venció el ' : ''}${formatFechaCorta(r.fecha)}</div>
         </div>
         <div class="reminder-actions">
+          <button class="pill-btn" data-action="editar" data-id="${r.id}">Editar</button>
           <button class="pill-btn" data-action="posponer" data-id="${r.id}">+3d</button>
         </div>
       </div>`;
