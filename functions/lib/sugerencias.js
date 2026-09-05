@@ -4,7 +4,11 @@
 //
 // Corre con menos frecuencia que los recordatorios (ver index.js) porque,
 // a diferencia de un recordatorio, una sugerencia no tiene que respetar un
-// minuto exacto — solo una ventana horaria amplia (ver docs/firebase-
+// minuto exacto — solo una ventana horaria amplia. Y, a diferencia de una
+// primera versión de este archivo, cada CUENTA se evalúa una sola vez por
+// día (ver HORA_CHEQUEO_LOCAL y procesarUnUsuario más abajo) — el
+// scheduler puede seguir corriendo seguido sin que eso implique releer
+// cultivos/eventos de cada cuenta en cada corrida (ver docs/firebase-
 // architecture.md, sección Push Notifications).
 
 const admin = require('firebase-admin');
@@ -19,6 +23,17 @@ const { enviarATokenDispositivo, limpiarDispositivoInvalido } = require('./fcm')
 const ORDEN_ORIGEN = ['especie', 'evento-reciente', 'biblioteca-etapa', 'biblioteca-ecologia', 'biblioteca-cosecha', 'general'];
 
 const VENTANA_HORARIA = { desde: 9, hasta: 19 }; // 09:00–19:00 hora local del dispositivo
+
+// Hora local a partir de la cual se hace LA ÚNICA revisión del día para
+// una cuenta — no apenas se abre la ventana (9). 13:00 es un punto medio
+// arbitrario pero razonable: da tiempo a que la persona ya haya
+// registrado algún evento de la mañana antes de que el motor evalúe sus
+// cultivos. Ver procesarUnUsuario() más abajo para el porqué de "una sola
+// vez" (evitar releer cultivos/eventos hasta 20 veces por día por cuenta
+// sin necesidad real — una sugerencia no es urgente, no hace falta
+// revisar cada 30-60 minutos si "ya apareció algo").
+const HORA_CHEQUEO_LOCAL = 13;
+
 const HISTORIAL_MAX = 8; // mismo tamaño que la memoria anti-repetición de Inicio (cliente)
 
 function horaLocalEnZona(timeZone) {
@@ -69,21 +84,43 @@ async function procesarSugerenciasPush() {
 
 async function procesarUnUsuario(db, uid, dispositivos) {
   // Solo los dispositivos que ahora mismo están dentro de la ventana
-  // horaria local (09-19 en SU zona, no en la del servidor).
+  // horaria local (09-19 en SU zona, no en la del servidor) — esto decide
+  // a quién se le puede llegar a MANDAR en esta corrida (se recalcula
+  // siempre, por dispositivo, sin importar si hoy ya se revisó o no).
   const enVentana = dispositivos.filter((d) => {
     const hora = horaLocalEnZona(d.timezone || 'UTC');
     return hora != null && hora >= VENTANA_HORARIA.desde && hora < VENTANA_HORARIA.hasta;
   });
   if (!enVentana.length) return false;
 
-  const hoyLocal = fechaLocalEnZona(enVentana[0].timezone || 'UTC');
+  // La revisión en sí (la parte cara: leer cultivos/eventos y correr el
+  // motor) pasa UNA sola vez por día por cuenta, recién a partir de
+  // HORA_CHEQUEO_LOCAL — no en cada corrida mientras dure la ventana. Se
+  // usa la zona del primer dispositivo en ventana como "reloj
+  // representativo" de la cuenta (simplificación a propósito: si una
+  // misma cuenta tuviera dispositivos en husos horarios muy distintos,
+  // caso raro, el chequeo se guía por uno solo de ellos — ver
+  // docs/firebase-architecture.md, sección 12.6).
+  const zonaRepresentativa = enVentana[0].timezone || 'UTC';
+  const horaLocal = horaLocalEnZona(zonaRepresentativa);
+  const hoyLocal = fechaLocalEnZona(zonaRepresentativa);
+  if (horaLocal == null || hoyLocal == null || horaLocal < HORA_CHEQUEO_LOCAL) return false;
+
   const pushStateRef = db.collection('users').doc(uid).collection('pushState').doc('sugerencias');
   const pushStateSnap = await pushStateRef.get();
   const pushState = pushStateSnap.exists ? pushStateSnap.data() : null;
-  if (pushState && pushState.ultimoEnvioFecha === hoyLocal) return false; // ya se mandó una hoy (máx 1/día)
+  if (pushState && pushState.ultimaRevisionFecha === hoyLocal) return false; // hoy ya se revisó (haya encontrado algo o no)
 
   const candidato = await elegirCandidato(db, uid, pushState);
-  if (!candidato) return false; // nada realmente pertinente: no se manda nada, no es una falla
+
+  if (!candidato) {
+    // Nada realmente pertinente: no se manda nada (no es una falla), pero
+    // igual se registra la revisión de hoy — así no se vuelve a pagar el
+    // costo de releer cultivos/eventos si el scheduler corre de nuevo más
+    // tarde, dentro de la misma ventana de hoy.
+    await pushStateRef.set({ ultimaRevisionFecha: hoyLocal, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    return false;
+  }
 
   const data = { tipo: 'sugerencia', cultivoId: candidato.cultivoId };
   let enviados = 0;
@@ -93,16 +130,19 @@ async function procesarUnUsuario(db, uid, dispositivos) {
     if (envio.ok) enviados += 1;
     else if (envio.tokenInvalido) await limpiarDispositivoInvalido(db, uid, device.id);
   }
-  if (!enviados) return false;
 
+  // Se registra la revisión de hoy tanto si se pudo enviar como si no
+  // (ej. ningún dispositivo en ventana tenía token válido) — de cualquier
+  // manera ya se gastó el costo de evaluar, y reintentar más tarde en el
+  // mismo día no cambiaría el resultado (los mismos cultivos/eventos).
   const historialPrevio = (pushState && pushState.historial) || [];
   await pushStateRef.set({
-    ultimoEnvioFecha: hoyLocal,
-    historial: [candidato.clave, ...historialPrevio].slice(0, HISTORIAL_MAX),
+    ultimaRevisionFecha: hoyLocal,
+    historial: enviados > 0 ? [candidato.clave, ...historialPrevio].slice(0, HISTORIAL_MAX) : historialPrevio,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
 
-  return true;
+  return enviados > 0;
 }
 
 // Calcula, con el motor REAL (ver motorLoader.js), la mejor sugerencia

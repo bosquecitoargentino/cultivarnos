@@ -38,14 +38,15 @@ exports.procesarRecordatorios = onSchedule('every 1 minutes', async () => {
   }
 });
 
-// Sugerencias: cada 30 minutos — a diferencia de un recordatorio, una
-// sugerencia contextual no tiene que respetar un minuto exacto, solo caer
-// dentro de la ventana horaria amplia (09-19 local) y respetar el máximo
-// de una por día. 30 minutos es tolerancia de sobra para ese caso de uso
-// y evita 48x más invocaciones/día que si corriera cada 1 minuto como los
-// recordatorios (impacto directo en el costo de Blaze — ver
-// docs/firebase-architecture.md).
-exports.procesarSugerencias = onSchedule('every 30 minutes', async () => {
+// Sugerencias: cada 1 hora — de sobra para este caso de uso, porque cada
+// CUENTA se evalúa una única vez por día (a partir de las 13:00 hora
+// local, ver HORA_CHEQUEO_LOCAL en sugerencias.js) sin importar cuántas
+// veces corra el scheduler mientras tanto — así que correr más seguido
+// no adelantaría nada, solo pagaría más lecturas de Firestore de la
+// consulta base (pushDevices) sin ningún beneficio real (ver
+// docs/firebase-architecture.md, sección Push Notifications, para el
+// desglose de costo).
+exports.procesarSugerencias = onSchedule('every 1 hours', async () => {
   const resultado = await procesarSugerenciasPush();
   if (resultado.usuariosNotificados) {
     console.log('[Cultivarnos Functions] sugerencias enviadas:', resultado.usuariosNotificados);

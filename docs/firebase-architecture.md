@@ -501,8 +501,8 @@ users/{uid}/pushDevices/{deviceId}
     platform, timezone,
     createdAt, updatedAt, lastSeenAt }
 
-users/{uid}/pushState/sugerencias      // anti-repetición + tope 1/día (solo lo escribe el servidor)
-  { ultimoEnvioFecha, historial[], updatedAt }
+users/{uid}/pushState/sugerencias      // 1 revisión/día + anti-repetición (solo lo escribe el servidor)
+  { ultimaRevisionFecha, historial[], updatedAt }
 ```
 
 Un documento por **instalación**, nunca uno por cuenta: la misma persona
@@ -671,18 +671,37 @@ que el motor real decidiría en ese momento:
   `utils.js` cambia esas funciones.
 
 `functions/lib/sugerencias.js` orquesta (nunca decide agronomía): agrupa
-`pushDevices` habilitados para sugerencias por cuenta, filtra a los
-dispositivos que ahora mismo están en su ventana horaria LOCAL (09:00–
-19:00, calculada con `Intl.DateTimeFormat` sobre el `timezone` de cada
-dispositivo — nunca la hora del servidor), chequea el tope de una por día
-por cuenta (`pushState/sugerencias.ultimoEnvioFecha`), corre el motor
-real sobre los cultivos/eventos actuales de la cuenta, descarta cualquier
-candidata ya mostrada/oculta/resuelta reciente (`historial`, últimas 8,
-por `cultivoId+idPregunta`), y si hay más de una candidata igualmente
-relevante elige entre ellas con el mismo orden de prioridad que ya usa
-Inicio en el cliente (`ORDEN_ORIGEN`). **Si no hay nada realmente
-pertinente, no se manda nada** — nunca se fabrica contenido solo para
-tener algo que mandar.
+`pushDevices` habilitados para sugerencias por cuenta, y para cada cuenta
+filtra a los dispositivos que ahora mismo están en su ventana horaria
+LOCAL (09:00–19:00, calculada con `Intl.DateTimeFormat` sobre el
+`timezone` de cada dispositivo — nunca la hora del servidor).
+
+**La evaluación en sí (leer cultivos/eventos y correr el motor) pasa como
+máximo UNA VEZ POR DÍA por cuenta** — no en cada corrida del scheduler
+mientras dure la ventana horaria. Recién a partir de las 13:00 hora local
+(`HORA_CHEQUEO_LOCAL`, un punto medio arbitrario dentro de la ventana,
+elegido para dar tiempo a que la persona ya haya registrado algo esa
+mañana) se hace la primera y única revisión del día: se chequea
+`pushState/sugerencias.ultimaRevisionFecha` (si ya dice hoy, no se vuelve
+a evaluar, haya encontrado algo la vez anterior o no) y recién ahí se
+corre el motor real sobre los cultivos/eventos actuales de la cuenta,
+descartando cualquier candidata ya mostrada/oculta/resuelta reciente
+(`historial`, últimas 8, por `cultivoId+idPregunta`), y si hay más de una
+candidata igualmente relevante elige entre ellas con el mismo orden de
+prioridad que ya usa Inicio en el cliente (`ORDEN_ORIGEN`). **Si no hay
+nada realmente pertinente, no se manda nada** — nunca se fabrica
+contenido solo para tener algo que mandar — pero igual se registra la
+revisión de hoy, para no pagar de nuevo el costo de releer cultivos y
+eventos si el scheduler vuelve a correr más tarde en la misma ventana.
+
+Esta simplificación (evaluar 1 vez por día en vez de hasta ~20 veces
+mientras dura la ventana) es deliberada y fue la razón para bajar la
+frecuencia del scheduler de sugerencias de cada 30 minutos a cada 1 hora
+(ver `functions/index.js`) — correr más seguido no adelantaría ninguna
+sugerencia (igual se espera a las 13:00 y a la revisión única del día),
+solo pagaría más lecturas de la consulta base de `pushDevices` sin
+ningún beneficio real. Es también, por sí sola, la optimización de costo
+más relevante de las dos Cloud Functions — ver el desglose en 12.9.
 
 El tono lo define enteramente el motor real reutilizado (nunca se generó
 texto nuevo en el backend): observar → comprender → decidir, sugerente
@@ -781,21 +800,29 @@ funcionando exactamente igual.
 **Qué requiere Blaze y qué factura, específicamente:**
 
 - **Cloud Functions v2** (`procesarRecordatorios`, cada 1 minuto —
-  43.200 invocaciones/mes; `procesarSugerencias`, cada 30 minutos — 1.440
-  invocaciones/mes) y el **Cloud Scheduler** que las dispara. Ambos
-  dentro del nivel gratuito de Cloud Functions (2M invocaciones/mes) para
-  cualquier volumen de usuarios remotamente cercano al de esta beta — el
-  costo real esperado es prácticamente $0/mes, pero el plan Blaze en sí
-  (aunque no se supere el nivel gratuito) es un requisito de
-  habilitación de Google Cloud para poder desplegar Functions v2 y
-  Scheduler, no una elección de esta integración.
-- **Firestore**: las lecturas que hace cada corrida (`collectionGroup`
-  sobre `recordatorios`/`pushDevices`, más las lecturas de
-  cultivos/eventos/configuración de `sugerencias.js`) se suman a las
-  lecturas normales que ya hacía el Sync Engine — escala con la cantidad
-  de cuentas activas y recordatorios pendientes, no debería ser
-  significativo a la escala actual, pero es el ítem a vigilar si la base
-  de usuarios crece mucho (ver también el ítem de "cuotas/límites" de la
+  43.200 invocaciones/mes; `procesarSugerencias`, cada 1 hora — 720
+  invocaciones/mes) y el **Cloud Scheduler** que las dispara (2 jobs,
+  dentro de los 3 gratis por cuenta de facturación por mes). El total de
+  invocaciones (~44.000/mes) está fijo — no crece con la cantidad de
+  usuarios, porque son 2 funciones programadas, no una por cuenta — y
+  queda lejísimos del nivel gratuito de Cloud Functions (2.000.000/mes)
+  sin importar cuánto crezca Cultivarnos: esta línea de costo nunca va a
+  ser significativa.
+- **Firestore — la única línea que sí escala con la cantidad de
+  usuarios**, y específicamente por la consulta base de
+  `sugerencias.js` (`collectionGroup('pushDevices')`, que lee un
+  documento por cada dispositivo con sugerencias activadas, en cada
+  corrida) — el resto (recordatorios, y la evaluación puntual de
+  cultivos/eventos por cuenta) pesa poco porque solo se paga cuando
+  hay algo concreto para procesar, y en el caso de sugerencias como
+  máximo una vez por cuenta por día (ver 12.6). Con esa evaluación ya
+  acotada a 1 vez/día, el costo por cada 1.000 dispositivos con
+  sugerencias activadas es de aproximadamente 24.000 lecturas/día extra
+  (24 corridas/día × 1.000) solo por esa consulta base — bien dentro del
+  nivel gratuito de Firestore (50.000 lecturas/día) hasta unos ~2.000
+  dispositivos activos, y aun superándolo el costo es ínfimo ($0.03 cada
+  100.000 lecturas de más). Es, aun así, el ítem a vigilar si la base de
+  usuarios crece mucho (ver también el ítem de "cuotas/límites" de la
   sección 10).
 - **Firebase Cloud Messaging en sí es gratis** — no tiene costo por
   mensaje enviado.
