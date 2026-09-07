@@ -25,7 +25,7 @@ import { obtenerFirebaseApp, SDK_VERSION } from './firebase-config.js';
 // Firebase, así que no se puede completar de antemano. Mientras diga
 // 'PEGAR_VAPID_KEY_ACA', activar() devuelve un mensaje claro en vez de
 // fallar de forma confusa.
-const VAPID_KEY = 'PEGAR_VAPID_KEY_ACA';
+const VAPID_KEY = 'BMxXXfDJ5BvDLjPsLm_QC0CsxkdJy7FkgtZXhTzjI1zAm3C5VvPmnwbxGclAjrewI4i8dCZUKApZGKQld79LcEQ';
 
 const CLAVE_INVITACION_RECHAZADA = 'cultivarnos-push-invitacion-rechazada';
 
