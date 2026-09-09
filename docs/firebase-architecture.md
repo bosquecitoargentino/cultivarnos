@@ -764,6 +764,21 @@ funcionando exactamente igual.
   push de A (cada cuenta tiene su propia subcolección `pushDevices`); si
   activa notificaciones, se crea/reactiva el documento de este mismo
   `deviceId` bajo `users/{uidNuevo}/`.
+- **La misma cuenta vuelve a entrar en el mismo dispositivo** (A cierra
+  sesión y A mismo vuelve a loguearse, con o sin B de por medio): la
+  elección de A de recibir notificaciones queda firme hasta que A mismo la
+  cambie, no hace falta reactivarla a mano en cada login.
+  `asegurarSyncIniciado()` (`app.js`) llama, una vez por login, a
+  `CultivarnosPush.reanudarSiCorrespondia(uid)`: si
+  `Notification.permission` de este navegador ya es `'granted'` Y ya
+  existe `users/{uid}/pushDevices/{deviceId}` para esta cuenta y este
+  dispositivo (aunque esté en `enabled:false` por el logout anterior), se
+  refresca el token y se vuelve a poner `enabled:true` en silencio, sin
+  ningún prompt nuevo. Si el documento no existe (esta cuenta nunca activó
+  notificaciones en este dispositivo), no se hace nada — aunque el permiso
+  del navegador ya esté concedido por OTRA cuenta que usó antes este mismo
+  dispositivo: el permiso es del navegador, no de la app, así que por sí
+  solo nunca alcanza para reactivar nada.
 - **Token permanentemente inválido** (FCM confirma
   `registration-token-not-registered`/`invalid-registration-token`/
   `invalid-argument`): se borra SOLO ese documento de dispositivo

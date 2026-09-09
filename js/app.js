@@ -47,6 +47,10 @@ async function asegurarSyncIniciado(uid, perfil) {
   if (!window.CultivarnosSync || syncIniciadoParaUid === uid) return;
   syncIniciadoParaUid = uid;
   await window.CultivarnosSync.iniciar({ uid, perfil });
+  // Reanuda en silencio las notificaciones de este dispositivo para esta
+  // cuenta si ya las había activado antes (ver firebase-messaging.js#
+  // reanudarSiCorrespondia) — nunca bloquea el arranque, por eso sin await.
+  if (window.CultivarnosPush) window.CultivarnosPush.reanudarSiCorrespondia(uid);
 }
 
 // Sin sesión confirmada por Firebase PERO este dispositivo tenía una

@@ -206,6 +206,74 @@ async function desactivarEnEsteDispositivo() {
   }
 }
 
+// Login (nueva sesión o resumida en esta misma carga): si el permiso del
+// navegador ya está 'granted' Y este dispositivo YA tenía un documento
+// users/{uid}/pushDevices/{deviceId} para ESTA cuenta (sin importar su
+// `enabled` actual — puede haber quedado en false por un logout anterior
+// de esta misma cuenta, o por "Desactivar en este dispositivo" en
+// Ajustes), se reactiva en silencio: refresca el token y vuelve a poner
+// enabled:true, preservando remindersEnabled/suggestionsEnabled ya
+// elegidos. Así la elección de la persona queda firme hasta que ella
+// misma la cambie — no hace falta reactivar notificaciones cada vez que
+// cierra sesión y vuelve a entrar con la MISMA cuenta en este dispositivo.
+//
+// Si NO existe el documento para este uid+deviceId (esta cuenta nunca
+// activó notificaciones en este dispositivo), no se hace nada — aunque
+// Notification.permission ya sea 'granted' por OTRA cuenta que usó antes
+// este mismo dispositivo (el permiso es del navegador, no de la app).
+// Nunca se activa nada sin una acción explícita previa de ESTA cuenta en
+// ESTE dispositivo — ver docs/firebase-architecture.md, sección Push
+// Notifications, aislamiento entre cuentas en un dispositivo compartido.
+//
+// Se llama una vez por login desde app.js (junto a CultivarnosSync.iniciar)
+// — nunca bloquea el arranque (best-effort, sin await del lado de quien
+// llama) y nunca lanza sin atrapar.
+async function reanudarSiCorrespondia(uid) {
+  if (!uid) return;
+  if (!soportado() || !vapidConfigurada()) return;
+  if (Notification.permission !== 'granted') return;
+
+  const ctx = await obtenerFirebaseApp();
+  if (!ctx) return;
+  const deviceId = window.DB.obtenerDeviceId();
+
+  let previo;
+  try {
+    const { doc, getDoc } = ctx.firestoreMod;
+    const snap = await getDoc(doc(ctx.db, 'users', uid, 'pushDevices', deviceId));
+    if (!snap.exists()) return; // esta cuenta nunca activó notificaciones en este dispositivo
+    previo = snap.data();
+  } catch (err) {
+    console.warn('[Cultivarnos] no se pudo revisar el estado de notificaciones al iniciar sesión:', err);
+    return;
+  }
+  if (previo.enabled === true) return; // ya estaba activo, nada para reanudar
+
+  const m = await obtenerMessaging();
+  if (!m) return;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const token = await m.messagingMod.getToken(m.messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
+    if (!token) return;
+
+    const { doc, setDoc, serverTimestamp } = m.firestoreMod;
+    const ref = doc(m.db, 'users', uid, 'pushDevices', deviceId);
+    await setDoc(ref, {
+      installationId: deviceId,
+      token,
+      enabled: true,
+      remindersEnabled: previo.remindersEnabled !== false,
+      suggestionsEnabled: previo.suggestionsEnabled !== false,
+      platform: plataformaActual(),
+      timezone: obtenerTimezoneDispositivo(),
+      updatedAt: serverTimestamp(),
+      lastSeenAt: serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    console.warn('[Cultivarnos] no se pudo reanudar notificaciones al iniciar sesión (se puede reactivar manualmente en Ajustes):', err);
+  }
+}
+
 // Cambio de cuenta / logout (ver app.js#cerrarSesion en firebase-auth.js):
 // desvincula ESTE dispositivo de la cuenta que se está por dejar, para
 // que "Usuario A -> logout -> Usuario B" nunca le llegue un push de A a
@@ -303,6 +371,7 @@ if (window.CultivarnosPush && window.CultivarnosPush.__esStubDePrueba) {
     obtenerEstadoDispositivo,
     actualizarPreferencias,
     desvincularDeCuenta,
+    reanudarSiCorrespondia,
     ofrecerActivarSiCorresponde,
   };
   // Si ya había permiso concedido de una visita anterior, escuchamos
