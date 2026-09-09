@@ -3,7 +3,7 @@
   "description": "Cloud Functions de Cultivarnos — recordatorios y sugerencias push (Firebase Cloud Messaging). Ver docs/firebase-architecture.md, sección Push Notifications.",
   "private": true,
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "dependencies": {
